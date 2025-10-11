@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  system_info_app:
+    build:
+      context: ..
+      dockerfile: local/Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../system_info_app:/app/system_info_app
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    restart: unless-stopped
