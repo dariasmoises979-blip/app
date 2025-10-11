@@ -1,20 +1,16 @@
-name: My App CI/CD
+name: Call Reusable Workflow
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build:
+  call-hello-world:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main # Aquí el 'main' es la rama del shared-workflows
-    with:
-      image-name: moises
-      dockerfile-path: ./Dockerfile
-      registry-username: moises # El username ya no es secreto
-    secrets:
-      # Solo el token es secreto
-      REGISTRY_TOKEN: ${{ secrets.GH_TOKEN }}
+
 
 
 
