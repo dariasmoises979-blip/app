@@ -1,4 +1,6 @@
-name: Call Reusable Workflow
+
+
+name: Call Date Workflow
 
 on:
   push:
@@ -8,12 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  call-hello-world:
+  call-date-workflow:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main # Aquí el 'main' es la rama del shared-workflows
-
-
-    secrets:
-      # Solo el token es secreto
-      REGISTRY_TOKEN: ${{ secrets.GH_TOKEN}}
-
- 
+    with:
+      timezone: 'Europe/Madrid'
