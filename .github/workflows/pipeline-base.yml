@@ -12,6 +12,8 @@ jobs:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main # Aquí el 'main' es la rama del shared-workflows
 
 
-
+    secrets:
+      # Solo el token es secreto
+      REGISTRY_TOKEN: ${{ secrets.GH.TOKEN }}
 
  
