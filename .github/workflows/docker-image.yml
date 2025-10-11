@@ -1,3 +1,11 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
 jobs:
   call-reusable:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deploy.yml@main
