@@ -7,14 +7,10 @@ on:
     branches: [ "main" ]
 
 jobs:
-
-  build:
-
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: docker build system_info_app --file system_info_app/Dockerfile --tag my-image-name:$(date +%s)
-
+  call-reusable:
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
+    with:
+      python_version: '3.11'
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
      
