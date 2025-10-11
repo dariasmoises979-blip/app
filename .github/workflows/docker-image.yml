@@ -17,9 +17,9 @@ jobs:
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
 
-    - name: call-reusable
-      uses: org/reusable-workflows/.github/workflows/deploy.yml@v1
-      with:
-        python_version: '3.11'
-      secrets:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#    - name: call-reusable
+#      uses: org/reusable-workflows/.github/workflows/deploy.yml@v1
+#      with:
+#        python_version: '3.11'
+#      secrets:
+#        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
