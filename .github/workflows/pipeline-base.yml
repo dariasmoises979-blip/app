@@ -1,15 +1,21 @@
-name: Deploy using Reusable Workflow
+name: My App CI/CD
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
-  call-reusable:
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
+  build:
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main # Aquí el 'main' es la rama del shared-workflows
     with:
-      python_version: '3.11'
+      image-name: moises
+      dockerfile-path: ./Dockerfile
+      registry-username: moises # El username ya no es secreto
     secrets:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      # Solo el token es secreto
+      REGISTRY_TOKEN: ${{ secrets.GH_TOKEN }}
+
+
+
+ 
