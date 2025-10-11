@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app  # Mapea archivos locales al contenedor (ideal para desarrollo en vivo)
+    environment:
+      - FLASK_ENV=development
+    restart: unless-stopped
+
