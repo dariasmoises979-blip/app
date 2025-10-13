@@ -3,9 +3,7 @@ name: workflow-dev
 on:
   pull_request:
     branches:
-      - main
-    paths:
-      - 'feature/**'
+      - main  # rama de destino del PR
 
 jobs:
   example-job:
