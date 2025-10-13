@@ -1,16 +1,34 @@
-
-
-name: Call Date Workflow
+name: workflow-dev
 
 on:
-  push:
-    branches: [main]
   pull_request:
-    branches: [main]
-  workflow_dispatch:
+    branches: [feature/*]
 
 jobs:
-  call-date-workflow:
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main # Aquí el 'main' es la rama del shared-workflows
-    with:
-      timezone: 'Europe/Madrid'
+  example-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+      - name: Run a one-line script
+        run: echo "This is a workflow for feature branches!"
+      - name: Run a multi-line script
+        run: |
+          echo "This is a multi-line script."
+          echo "You can add more commands here."
+  
+
+#name: Call Date Workflow
+
+#on:
+#  push:
+#    branches: [main]
+#  pull_request:
+#    branches: [main]
+#  workflow_dispatch:
+
+#jobs:
+#  call-date-workflow:
+#    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main # Aquí el 'main' es la rama del shared-workflows
+#    with:
+#      timezone: 'Europe/Madrid'
