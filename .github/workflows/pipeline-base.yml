@@ -2,7 +2,10 @@ name: workflow-dev
 
 on:
   pull_request:
-    branches: [feature/*]
+    branches:
+      - main
+    paths:
+      - 'feature/**'
 
 jobs:
   example-job:
@@ -11,12 +14,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v5
       - name: Run a one-line script
-        run: echo "This is a workflow for feature branches!"
+        run: echo "This is a workflow triggered by a pull request to main from a feature branch!"
       - name: Run a multi-line script
         run: |
           echo "This is a multi-line script."
           echo "You can add more commands here."
-  
 
 #name: Call Date Workflow
 
