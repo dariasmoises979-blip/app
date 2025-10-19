@@ -10,8 +10,3 @@ jobs:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
 
 
-    with:
-      docker_username: ${{ secrets.DOCKER_USERNAME }}
-      docker_password: ${{ secrets.DOCKER_PASSWORD }}
-      image_name: 'dariasmoises979/blip-app'
-      image_tag: 'pr-${{ github.event.number }}'
