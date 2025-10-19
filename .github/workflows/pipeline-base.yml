@@ -1,4 +1,4 @@
-name: workflow-dev
+name: Build & Publish using Reusable Workflow
 
 on:
   pull_request:
@@ -6,7 +6,10 @@ on:
       - main  # rama de destino del PR
 
 jobs:
-  example-job:
+  call-reusable:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
-
-
+    with:
+      docker_image: flask-info-app
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
