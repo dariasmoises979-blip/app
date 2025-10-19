@@ -13,3 +13,4 @@ jobs:
       dockerhub_username: dariasmoises979  
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
