@@ -6,6 +6,14 @@ COMPOSE_FILE := docker-compose.yml
 DOCKER_COMPOSE := docker compose -f $(COMPOSE_FILE)
 PORT := 5000
 
+
+COLOR_BLUE = \033[1;34m
+COLOR_RED = \033[1;31m
+COLOR_RESET = \033[0m
+CONTAINER_ID := $(shell docker ps -qf "name=local-system_info_app")
+
+
+
 # Colores para output
 COLOR_RESET := \033[0m
 COLOR_BOLD := \033[1m
@@ -44,6 +52,8 @@ help:
 	@echo "$(COLOR_BOLD)🧪 Testing y calidad:$(COLOR_RESET)"
 	@echo "  $(COLOR_GREEN)make test$(COLOR_RESET)        - Ejecutar suite de tests"
 	@echo "  $(COLOR_GREEN)make check-docker$(COLOR_RESET) - Verificar Docker instalado"
+	@echo "  $(COLOR_GREEN)make network-info$(COLOR_RESET)   - Muestra la información de red del contenedor"
+	@echo "  $(COLOR_GREEN)make dns-info$(COLOR_RESET)       - Muestra el DNS configurado dentro del contenedor"
 	@echo ""
 	@echo "$(COLOR_BOLD)🧹 Mantenimiento:$(COLOR_RESET)"
 	@echo "  $(COLOR_GREEN)make clean$(COLOR_RESET)       - Limpieza completa"
@@ -123,10 +133,27 @@ shell:
 	@echo "$(COLOR_BLUE)🐚 Abriendo shell en contenedor...$(COLOR_RESET)"
 	@$(DOCKER_COMPOSE) exec web bash || $(DOCKER_COMPOSE) exec web sh
 
+
+COLOR_BLUE = \033[1;34m
+COLOR_RESET = \033[0m
+CONTAINER_NAME = local-system_info_app-1
+
+network-info:
+	@echo "$(COLOR_BLUE)🌐 Mostrando información de red del contenedor $(CONTAINER_NAME)...$(COLOR_RESET)"
+	@docker inspect -f 'Nombre: {{.Name}} \
+	\nID: {{.Id}} \
+	\nIP: {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}} \
+	\nPuerta de enlace: {{range .NetworkSettings.Networks}}{{.Gateway}}{{end}} \
+	\nDNS: {{.HostConfig.Dns}}' $(CONTAINER_NAME)
+
+dns-info:
+	@echo "📡 Mostrando DNS configurado dentro del contenedor $(CONTAINER_NAME)..."
+	@docker exec -t $(CONTAINER_NAME) cat /etc/resolv.conf
+
 # ==================== TESTING ====================
 test:
-	@echo "$(COLOR_BLUE)🧪 Ejecutando tests...$(COLOR_RESET)"
-	@$(DOCKER_COMPOSE) exec -T web python -m pytest -v --color=yes || echo "$(COLOR_RED)❌ Tests fallidos$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)🧪 Ejecutando tests en el contenedor $(CONTAINER_ID)...$(COLOR_RESET)"
+	@docker exec -t $(CONTAINER_ID) python -m pytest -v --color=yes || echo "$(COLOR_RED)❌ Tests fallidos$(COLOR_RESET)"
 
 # ==================== MANTENIMIENTO ====================
 clean:
