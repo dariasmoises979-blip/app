@@ -7,28 +7,11 @@ on:
 
 jobs:
   example-job:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v5
-      - name: Run a one-line script
-        run: echo "This is a workflow triggered by a pull request to main from a feature branch!"
-      - name: Run a multi-line script
-        run: |
-          echo "This is a multi-line script."
-          echo "You can add more commands here."
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
 
-#name: Call Date Workflow
 
-#on:
-#  push:
-#    branches: [main]
-#  pull_request:
-#    branches: [main]
-#  workflow_dispatch:
-
-#jobs:
-#  call-date-workflow:
-#    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main # Aquí el 'main' es la rama del shared-workflows
-#    with:
-#      timezone: 'Europe/Madrid'
+    with:
+      docker_username: ${{ secrets.DOCKER_USERNAME }}
+      docker_password: ${{ secrets.DOCKER_PASSWORD }}
+      image_name: 'dariasmoises979/blip-app'
+      image_tag: 'pr-${{ github.event.number }}'
