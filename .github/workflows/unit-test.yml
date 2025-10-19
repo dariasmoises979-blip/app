@@ -1,29 +1,28 @@
 name: Run Unit Tests
 
 on:
-    pull_request:
-      branches:
-        - main  # rama de destino del PR
+  push:
+    branches:
+      - main 
+      - feature/** # se ejecuta cuando hay un push a main
 
 jobs:
   test:
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
-    with:
-      docker_image: flask-info-app
-      dockerhub_username: dariasmoises979  
-    secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+    name: Run Unit Tests
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
+   
+
   create-pr:
+    name: Create PR to build branch
     needs: test
     if: ${{ success() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Create PR to build branch
+      - name: Create Pull Request to build branch
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: dev
           base: build
           title: "Promote dev → build"
-          body: "✅ Tests passed successfully. Ready for build."
+          body: "✅ Tests passed successfully after push to main. Ready for build."
