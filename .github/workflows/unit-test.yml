@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
     with:
       docker_image: flask-info-app
       dockerhub_username: dariasmoises979  
