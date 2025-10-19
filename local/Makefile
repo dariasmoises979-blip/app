@@ -6,6 +6,14 @@ COMPOSE_FILE := docker-compose.yml
 DOCKER_COMPOSE := docker compose -f $(COMPOSE_FILE)
 PORT := 5000
 
+
+COLOR_BLUE = \033[1;34m
+COLOR_RED = \033[1;31m
+COLOR_RESET = \033[0m
+CONTAINER_ID := $(shell docker ps -qf "name=local-system_info_app")
+
+
+
 # Colores para output
 COLOR_RESET := \033[0m
 COLOR_BOLD := \033[1m
@@ -125,8 +133,8 @@ shell:
 
 # ==================== TESTING ====================
 test:
-	@echo "$(COLOR_BLUE)🧪 Ejecutando tests...$(COLOR_RESET)"
-	@$(DOCKER_COMPOSE) exec -T web python -m pytest -v --color=yes || echo "$(COLOR_RED)❌ Tests fallidos$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)🧪 Ejecutando tests en el contenedor $(CONTAINER_ID)...$(COLOR_RESET)"
+	@docker exec -t $(CONTAINER_ID) python -m pytest -v --color=yes || echo "$(COLOR_RED)❌ Tests fallidos$(COLOR_RESET)"
 
 # ==================== MANTENIMIENTO ====================
 clean:
