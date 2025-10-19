@@ -3,7 +3,8 @@ name: Run Unit Tests
 on:
   push:
     branches:
-      - main  # se ejecuta cuando hay un push a main
+      - main 
+      - feature/** # se ejecuta cuando hay un push a main
 
 jobs:
   test:
