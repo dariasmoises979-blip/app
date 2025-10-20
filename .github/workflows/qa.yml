@@ -1,0 +1,12 @@
+name: Run Qa Tests
+
+on:
+  push:
+    branches:
+      - dev
+      - qa/**
+
+jobs:
+  test:
+    name: Run Qa Tests
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa.yml@main
