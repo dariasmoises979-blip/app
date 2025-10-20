@@ -14,7 +14,7 @@ jobs:
   create-pr:
     name: Create PR from feature to dev
     needs: test
-    if: ${{ success() && startsWith(github.ref, 'refs/heads/feature/') }}
+    if: ${{ success() && startsWith(github.ref, 'refs/heads/feature/') }} #Este job espera a que termine otro job llamado "test". Solo se ejecuta si "test" termina.
     runs-on: ubuntu-latest
     permissions:
       contents: write
