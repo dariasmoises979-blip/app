@@ -33,7 +33,7 @@ jobs:
           with:
             token: ${{ secrets.GITHUB_TOKEN }}
             branch: qa
-            base: main
+            base: integration
             title: "QA Approval Request - $(date +'%Y-%m-%d')"
             body: |
               🚀 Los tests en QA han finalizado correctamente.
