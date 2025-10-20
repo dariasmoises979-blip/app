@@ -14,3 +14,7 @@ jobs:
   test:
     name: Run Qa Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa.yml@main
+    #with:
+    #  sonar-token: ${{ secrets.SONAR_TOKEN }}
+    #  branch: "qa"
+
