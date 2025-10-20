@@ -11,7 +11,7 @@ jobs:
     name: Run Unit Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
    
-    create-pr:
+  create-pr:
       name: Create PR from feature to dev
       needs: test
       if: ${{ success() && startsWith(github.ref, 'refs/heads/feature/') }}
