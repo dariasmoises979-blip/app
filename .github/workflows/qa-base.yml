@@ -8,4 +8,4 @@ on:
 jobs:
   test:
     name: Run Qa Tests
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa-base.yml@main
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa.yml@main
