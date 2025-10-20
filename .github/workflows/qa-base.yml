@@ -18,3 +18,26 @@ jobs:
     #  sonar-token: ${{ secrets.SONAR_TOKEN }}
     #  branch: "qa"
 
+
+  create-pr:
+      name: Create Pull Request for QA Approval
+      needs: test
+      runs-on: ubuntu-latest
+  
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+  
+        - name: Create Pull Request
+          uses: peter-evans/create-pull-request@v6
+          with:
+            token: ${{ secrets.GITHUB_TOKEN }}
+            branch: qa
+            base: main
+            title: "QA Approval Request - $(date +'%Y-%m-%d')"
+            body: |
+              🚀 Los tests en QA han finalizado correctamente.
+              
+              Por favor, revisa y aprueba este PR para mergear los cambios a **main**.
+            draft: false
+            delete-branch: false
