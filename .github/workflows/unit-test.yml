@@ -1,4 +1,4 @@
-name: Run Unit Tests
+name: Run Unit Tests and Merge to Dev
 
 on:
   push:
@@ -9,7 +9,36 @@ jobs:
   test:
     name: Run Unit Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
-   
+
+  merge-to-dev:
+    name: Merge to Dev
+    needs: test
+    runs-on: ubuntu-latest
+    if: success()
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Merge to dev
+        run: |
+          git fetch origin dev
+          git checkout dev
+          git merge --no-ff ${{ github.ref }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
+          git push origin dev
+
   # create-pr:
   #   name: Create PR from feature to dev
   #   needs: test
