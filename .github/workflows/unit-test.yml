@@ -11,18 +11,26 @@ jobs:
     name: Run Unit Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
    
-
   create-pr:
     name: Create PR to build branch
     needs: test
     if: ${{ success() }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for all branches
+          
       - name: Create Pull Request to build branch
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: dev
-          base: build
+          branch: feature/**
+          base: dev
           title: "Promote dev → build"
           body: "✅ Tests passed successfully after push to main. Ready for build."
+          commit-message: "Promote dev to build"
