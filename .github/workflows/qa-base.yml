@@ -3,8 +3,7 @@ name: Run Qa Tests
 on:
   push:
     branches:
-      - qa
-      
+      - qa      
 
 jobs:
   test:
