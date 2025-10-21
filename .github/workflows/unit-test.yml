@@ -60,7 +60,7 @@ jobs:
     - name: Create Pull Request Dev → QA
       uses: peter-evans/create-pull-request@v6
       with:
-        token: ${{ secrets.GH_TOKEN }}
+        token: ${{ secrets.GH_TOKEN2 }}
         base: qa
         branch: dev
         title: "QA Approval Needed - Commit ${{ steps.vars.outputs.sha_short }}"
