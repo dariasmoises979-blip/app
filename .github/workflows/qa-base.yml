@@ -17,15 +17,6 @@ permissions:
   pull-requests: write
   security-events: write
 
-jobs:
-  # Ejecuta los tests del reusable workflow solo si el PR viene desde dev
-  test:
-    name: Run QA Tests
-    if: github.head_ref == 'dev'
-    uses: ./.github/workflows/reusable-qa.yml
-    with:
-      branch: 'qa'
-    secrets: inherit
 
 jobs:
   test:
