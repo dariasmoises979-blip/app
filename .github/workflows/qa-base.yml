@@ -7,9 +7,14 @@ permissions:
 name: Run Qa Tests
 
 on:
-  push:
+  pull_request:
     branches:
-      - qa      
+      - qa          # se ejecuta cuando hay PR hacia qa
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
 
 jobs:
   test:
@@ -22,7 +27,7 @@ jobs:
   create-pr:
     name: Create Pull Request for QA Manual Merge
     needs: test
-    if: ${{ needs.test.result == 'success' }}   # solo si los tests pasan
+    if: ${{ needs.test.result == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -38,9 +43,9 @@ jobs:
       - name: Create Pull Request to Integration
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GH_TOKEN }}             # tu token personal
-          base: integration                          # rama destino
-          branch: qa-${{ steps.vars.outputs.sha_short }}  # rama temporal
+          token: ${{ secrets.GH_TOKEN }}
+          base: integration
+          branch: qa-${{ steps.vars.outputs.sha_short }}
           title: "QA Passed - Commit ${{ steps.vars.outputs.sha_short }}"
           body: |
             ✅ Los tests en QA han finalizado correctamente.
