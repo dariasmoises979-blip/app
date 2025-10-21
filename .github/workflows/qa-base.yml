@@ -1,9 +1,14 @@
 name: Run QA Tests and Create Integration PR
 
 on:
+  push:
+    branches:
+      - qa
+      - dev
   pull_request:
     branches:
       - qa
+      - dev
     types:
       - opened
       - synchronize
