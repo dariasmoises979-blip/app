@@ -1,14 +1,10 @@
 name: Run QA Tests and Create Integration PR
 
+
 on:
-  push:
-    branches:
-      - qa
-      - dev
   pull_request:
     branches:
       - qa
-      - dev
     types:
       - opened
       - synchronize
@@ -20,6 +16,7 @@ permissions:
   contents: write
   pull-requests: write
   security-events: write
+
 
 jobs:
   test:
