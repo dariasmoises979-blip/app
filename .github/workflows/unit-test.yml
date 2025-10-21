@@ -49,30 +49,28 @@ jobs:
     if: ${{ needs.merge-to-dev.result == 'success' }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Get commit short SHA
-        id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      - name: Configure Git credentials
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote remove origin
+          git remote add origin https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git
 
-      - name: Create Pull Request from dev to qa
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GH_TOKEN }}
-          base: qa
-          branch: dev
-          title: "Promote Dev → QA - Commit ${{ steps.vars.outputs.sha_short }}"
-          body: |
-            🚀 El merge de feature a **dev** ha sido exitoso y los tests unitarios pasaron.
+      - name: Merge feature branch into dev
+        run: |
+          git fetch origin dev
+          git checkout dev
+          git merge --no-ff ${{ github.ref_name }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
+          git push origin dev
 
-            Este PR promueve los cambios a **QA** para validación.
-
-            Por favor, revisa y aprueba este PR para continuar el flujo.
-          draft: false
-          delete-branch: false
           
 
           
