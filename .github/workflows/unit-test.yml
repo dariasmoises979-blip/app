@@ -18,26 +18,27 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_TOKEN }}
-          persist-credentials: true
-      
-      - name: Configure Git
+
+      - name: Configure Git credentials
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-      
-      - name: Merge to dev
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
+
+      - name: Merge feature into dev
         run: |
           git fetch origin dev
           git checkout dev
           git merge --no-ff ${{ github.ref }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
           git push origin dev
+
 ########################################3
   create-pr-to-qa:
     name: Create Pull Request from Dev to QA (manual approval)
