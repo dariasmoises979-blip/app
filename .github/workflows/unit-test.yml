@@ -100,7 +100,7 @@ jobs:
               const { data: pr } = await github.rest.pulls.create({
                 owner,
                 repo,
-                title: '🚀 Deploy dev to QA',
+                title: '🚀 Deploy DEV to QA',
                 head: 'dev',
                 base: 'qa',
                 body: `## Automatic deployment from dev to qa
