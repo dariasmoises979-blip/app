@@ -1,37 +1,24 @@
-name: Run QA Tests and Create Integration PR
-
-
-on:
-  push:
-    branches:
-      - qa
-      - dev
-  pull_request:
-    branches:
-      - qa
-      - dev
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
-
 permissions:
   actions: read
   contents: write
   pull-requests: write
   security-events: write
 
+name: Run Qa Tests
+
+on:
+  push:
+    branches:
+      - qa      
 
 jobs:
   test:
-    name: Run QA Tests
-    # Solo ejecuta si el PR viene desde dev
-    if: github.head_ref == 'dev'
+    name: Run Qa Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa.yml@main
-    # Si necesitas pasar secrets, descomenta:
-    # secrets:
-    #   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    #with:
+    #  sonar-token: ${{ secrets.SONAR_TOKEN }}
+    #  branch: "qa"
+
 
   # Job 2: Crear Pull Request desde QA hacia Integration
   create-pr:
