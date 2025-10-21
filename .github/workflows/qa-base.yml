@@ -35,7 +35,7 @@ jobs:
         - name: Create Pull Request
           uses: peter-evans/create-pull-request@v6
           with:
-            token: ${{ secrets.GITHUB_TOKEN }}
+            token: ${{ secrets.GH_TOKEN }}
             branch: qa                # Rama origen
             base: main                # Rama destino
             title: "QA Approval Request - $(date +'%Y-%m-%d')"
