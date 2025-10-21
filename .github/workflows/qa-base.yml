@@ -20,81 +20,175 @@ jobs:
     #  branch: "qa"
 
 
-  # Job 2: Crear Pull Request desde QA hacia Integration
+# Job 2: Crear Pull Request desde QA hacia Integration
   create-pr:
-    name: Create PR QA to Integration
-    needs: test
-    runs-on: ubuntu-latest
-    if: success() && github.head_ref == 'qa'
-
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Create Pull Request via API
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            
-            // Verificar si ya existe un PR abierto de qa a integration
-            const { data: existingPRs } = await github.rest.pulls.list({
-              owner,
-              repo,
-              head: `${owner}:qa`,
-              base: 'integration',
-              state: 'open'
-            });
-
-            if (existingPRs.length > 0) {
-              console.log(`✅ PR already exists: #${existingPRs[0].number}`);
-              console.log(`URL: ${existingPRs[0].html_url}`);
+      name: Create PR QA to Integration
+      needs: test
+      runs-on: ubuntu-latest
+      if: success() && github.ref == 'refs/heads/qa'
+      
+      permissions:
+        contents: read
+        pull-requests: write
+        issues: write
+      
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+        
+        - name: Create Pull Request via API
+          uses: actions/github-script@v7
+          with:
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+            script: |
+              const { owner, repo } = context.repo;
               
-              // Actualizar el PR existente con un comentario
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: existingPRs[0].number,
-                body: `🔄 QA branch updated from dev. Tests passed successfully.\n\n**Workflow run:** https://github.com/${owner}/${repo}/actions/runs/${context.runId}`
-              });
-              
-              return;
-            }
+              try {
+                // Verificar si ya existe un PR abierto de qa a integration
+                console.log('🔍 Checking for existing PRs...');
+                const { data: existingPRs } = await github.rest.pulls.list({
+                  owner,
+                  repo,
+                  head: `${owner}:qa`,
+                  base: 'integration',
+                  state: 'open'
+                });
+                
+                if (existingPRs.length > 0) {
+                  const existingPR = existingPRs[0];
+                  console.log(`✅ PR already exists: #${existingPR.number}`);
+                  console.log(`📎 URL: ${existingPR.html_url}`);
+                  
+                  // Actualizar el PR existente con un comentario
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: existingPR.number,
+                    body: `🔄 **QA branch updated**
+                    
+                  Tests passed successfully ✅
 
-            // Crear nuevo PR
-            const { data: pr } = await github.rest.pulls.create({
-              owner,
-              repo,
-              title: '🚀 Deploy QA to Integration',
-              head: 'qa',
-              base: 'integration',
-              body: `## Automatic deployment from qa to integration
-              
-            This PR contains the latest changes from \`qa\` branch ready for Integration environment.
+                  **Details:**
+                  - Commit: \`${context.sha.substring(0, 7)}\`
+                  - Workflow: [View run](https://github.com/${owner}/${repo}/actions/runs/${context.runId})
+                  - Updated: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
 
-            ### 📋 Pre-merge Checklist
-            - [ ] Code has been reviewed
-            - [ ] All tests are passing ✅
-            - [ ] Ready for Integration environment
+                  ---
+                  *Auto-updated by GitHub Actions*`
+                                });
+                                
+                                // Opcional: Añadir un label de "updated"
+                                await github.rest.issues.addLabels({
+                                  owner,
+                                  repo,
+                                  issue_number: existingPR.number,
+                                  labels: ['qa-updated']
+                                });
+                                
+                                return;
+                              }
+                              
+                              // Obtener información del último commit
+                              const { data: commit } = await github.rest.repos.getCommit({
+                                owner,
+                                repo,
+                                ref: 'qa'
+                              });
+                              
+                              // Obtener diferencias entre qa e integration
+                              const { data: comparison } = await github.rest.repos.compareCommits({
+                                owner,
+                                repo,
+                                base: 'integration',
+                                head: 'qa'
+                              });
+                              
+                              console.log('📝 Creating new PR...');
+                              
+                              // Crear nuevo PR
+                              const { data: pr } = await github.rest.pulls.create({
+                                owner,
+                                repo,
+                                title: '🚀 Deploy QA to Integration',
+                                head: 'qa',
+                                base: 'integration',
+                                body: `## 🎯 Automatic Deployment: QA → Integration
+                                
+                  This PR contains the latest tested changes from \`qa\` branch ready for the Integration environment.
 
-            ### 🔗 Links
-            - **Workflow run:** https://github.com/${owner}/${repo}/actions/runs/${context.runId}
-            - **Source PR:** #${context.payload.pull_request.number}
-            - **Commit:** ${context.sha}
+                  ### 📊 Summary
+                  - **Commits ahead:** ${comparison.ahead_by}
+                  - **Files changed:** ${comparison.files.length}
+                  - **Latest commit:** ${commit.commit.message.split('\n')[0]}
 
-            ---
-            *Auto-generated by GitHub Actions on ${new Date().toISOString()}*`,
-              draft: false
-            });
+                  ### 📋 Pre-merge Checklist
+                  - [x] Tests passed ✅
+                  - [ ] Code reviewed
+                  - [ ] Integration deployment approved
+                  - [ ] Documentation updated (if needed)
 
-            // Añadir labels al PR
-            await github.rest.issues.addLabels({
-              owner,
-              repo,
-              issue_number: pr.number,
-              labels: ['automated', 'deployment', 'integration']
-            });
+                  ### 🔗 Links
+                  - 🔗 [Workflow run](https://github.com/${owner}/${repo}/actions/runs/${context.runId})
+                  - 📝 [Latest commit](${commit.html_url})
+                  - 🌿 [Compare changes](https://github.com/${owner}/${repo}/compare/integration...qa)
 
-            console.log(`✅ Pull Request created: #${pr.number}`);
-            console.log(`URL: ${pr.html_url}`);
+                  ### 📅 Details
+                  - **Created:** ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
+                  - **Commit SHA:** \`${context.sha}\`
+
+                  ---
+                  *🤖 Auto-generated by GitHub Actions*`,
+                                draft: false
+                              });
+                              
+                              // Añadir labels al PR
+                              await github.rest.issues.addLabels({
+                                owner,
+                                repo,
+                                issue_number: pr.number,
+                                labels: ['automated', 'deployment', 'qa→integration', 'needs-review']
+                              });
+                              
+                              // Opcional: Añadir reviewers
+                              // Descomenta y personaliza según tu equipo
+                              // await github.rest.pulls.requestReviewers({
+                              //   owner,
+                              //   repo,
+                              //   pull_number: pr.number,
+                              //   reviewers: ['reviewer1', 'reviewer2']
+                              // });
+                              
+                              // Opcional: Asignar a alguien
+                              // await github.rest.issues.addAssignees({
+                              //   owner,
+                              //   repo,
+                              //   issue_number: pr.number,
+                              //   assignees: ['team-lead']
+                              // });
+                              
+                              console.log(`✅ Pull Request created successfully!`);
+                              console.log(`📎 PR #${pr.number}: ${pr.html_url}`);
+                              
+                              // Crear un resumen visible en el workflow
+                              core.summary
+                                .addHeading('Pull Request Created 🎉')
+                                .addLink(`PR #${pr.number}`, pr.html_url)
+                                .addRaw(`\n\nFrom: \`qa\` → To: \`integration\``)
+                                .addRaw(`\n\nCommits: ${comparison.ahead_by}`)
+                                .write();
+                              
+                            } catch (error) {
+                              console.error('❌ Error:', error.message);
+                              core.setFailed(`Failed to create PR: ${error.message}`);
+                              throw error;
+                            }
+                      
+                      - name: Notify on failure
+                        if: failure()
+                        uses: actions/github-script@v7
+                        with:
+                          script: |
+                            console.log('⚠️ Workflow failed. Check the logs for details.');
+                            // Aquí podrías enviar notificaciones a Slack, Teams, etc.
