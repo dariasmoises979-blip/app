@@ -10,80 +10,92 @@ jobs:
     name: Run Unit Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
 
+  # Job: Fusiona automáticamente cualquier rama feature/* en la rama dev
   merge-to-dev:
-    name: Merge to Dev
-    needs: test
+    name: Merge Feature to Dev
+    needs: test                     # Espera que el job "test" haya terminado
     runs-on: ubuntu-latest
-    if: success()
+    if: startsWith(github.ref_name, 'feature/') && success()
+    # Solo se ejecuta si:
+    # - El nombre de la rama actual comienza con "feature/"
+    # - Las pruebas fueron exitosas
+
     permissions:
-      contents: write
-      pull-requests: write
-    
+      contents: write               # Necesario para hacer push al repo
+      pull-requests: write          # (Opcional) Permite crear/actualizar PRs si hiciera falta
+
     steps:
+      # Paso 1: Clonar el repositorio completo
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0                   # Obtiene todo el historial
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
-      
+
+      # Paso 2: Configurar Git para los commits automáticos
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-      
-      - name: Merge to dev
+
+      # Paso 3: Hacer merge desde la rama feature/** actual hacia dev
+      - name: Merge feature into dev
         run: |
-          git fetch origin dev
-          git checkout dev
-          git merge --no-ff ${{ github.ref }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
-          git push origin dev
+          git fetch origin dev                         # Trae la última versión de dev
+          git checkout dev                             # Cambia a la rama dev
+          git merge --no-ff origin/${{ github.ref_name }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
+          # origin/${{ github.ref_name }} asegura que tomamos la versión remota actual de la feature
+          git push origin dev                          # Envía los cambios fusionados a la rama dev
+                                          # Envía los cambios al repositorio remoto
 
-  # create-pr:
-  #   name: Create PR from feature to dev
-  #   needs: test
-  #   if: ${{ success() && startsWith(github.ref, 'refs/heads/feature/') }}
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     contents: write
-  #     pull-requests: write
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
-          
-  #     - name: Create Pull Request to dev branch
-  #       id: create-pr
-  #       env:
-  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #       run: |
-  #         # Verificar si ya existe un PR abierto
-  #         existing_pr=$(gh pr list --base dev --head ${{ github.ref_name }} --state open --json number --jq '.[0].number')
-          
-  #         if [ -z "$existing_pr" ]; then
-  #           # Crear el PR si no existe
-  #           pr_number=$(gh pr create \
-  #             --base dev \
-  #             --head ${{ github.ref_name }} \
-  #             --title "Merge ${{ github.ref_name }} → dev" \
-  #             --body "✅ Tests passed successfully on \`${{ github.ref_name }}\`
+########################################3
+
+  # Workflow: Crea automáticamente un Pull Request desde QA hacia Integration
+  # cuando el merge a dev fue exitoso y las pruebas pasaron correctamente.
+
+  # Job 2: Crear Pull Request de dev a qa
+  create-pr:
+    name: Create PR to QA
+    needs: test  # Solo se ejecuta si los tests pasan
+    runs-on: ubuntu-latest
+    if: success()
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: dev
+          base: qa
+          title: "🚀 Deploy dev to QA"
+          body: |
+            ## Automatic deployment from dev to qa
             
-  #           **Branch:** \`${{ github.ref_name }}\`
-  #           **Target:** \`dev\`
-  #           **Commit:** ${{ github.sha }}" \
-  #             --json number --jq '.number')
-  #           echo "pr_number=$pr_number" >> $GITHUB_OUTPUT
-  #           echo "✅ PR #$pr_number created"
-  #         else
-  #           echo "pr_number=$existing_pr" >> $GITHUB_OUTPUT
-  #           echo "ℹ️ PR #$existing_pr already exists"
-  #         fi
+            This PR contains the latest changes from `dev` branch that are ready to be deployed to `qa`.
+            
+            ### Changes included
+            - All commits since last merge to qa
+            
+            ### Checklist before merging
+            - [ ] Code has been reviewed
+            - [ ] Tests are passing
+            - [ ] Ready for QA environment
+            
+            ---
+            **Auto-generated by GitHub Actions** - [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          labels: |
+            automated
+            deployment
+            qa
+          draft: false
 
-  #     - name: Auto-merge PR
-  #       if: steps.create-pr.outputs.pr_number
-  #       env:
-  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #       run: |
-  #         gh pr merge ${{ steps.create-pr.outputs.pr_number }} --auto --squash
-  #         echo "✅ Auto-merge enabled for PR #${{ steps.create-pr.outputs.pr_number }}"
+      - name: PR Created
+        run: echo "✅ Pull Request created successfully. Please review and merge manually from GitHub."

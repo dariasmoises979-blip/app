@@ -24,36 +24,39 @@ jobs:
     #  sonar-token: ${{ secrets.SONAR_TOKEN }}
     #  branch: "qa"
 
-  create-pr:
-    name: Create Pull Request for QA Manual Merge
-    needs: test
-    if: ${{ needs.test.result == 'success' }}
+  create-pr-to-integration:
+    name: Create Pull Request from QA to Integration (manual approval)
+    if: ${{ needs.create-pr-to-qa.result == 'success' }}
     runs-on: ubuntu-latest
-
+  
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Get commit short SHA
         id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: echo "sha_short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: Create Pull Request to Integration
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GH_TOKEN }}
-          base: integration
-          branch: qa-${{ steps.vars.outputs.sha_short }}
-          title: "QA Passed - Commit ${{ steps.vars.outputs.sha_short }}"
-          body: |
-            ✅ Los tests en QA han finalizado correctamente.
+      - name: Create PR QA → Integration (via GitHub API)
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ steps.vars.outputs.sha_short }}
+        run: |
+          echo "📦 Creando PR de qa → integration para el commit $SHA"
+          API_URL="https://api.github.com/repos/${REPO}/pulls"
 
-            Commit asociado: `${{ steps.vars.outputs.sha_short }}`
+          DATA=$(jq -n \
+            --arg title "Integration Approval Needed - Commit ${SHA}" \
+            --arg head "qa" \
+            --arg base "integration" \
+            --arg body "✅ Los tests en QA han finalizado correctamente.\n\nCommit asociado: \`${SHA}\`\n\nEste PR fue creado automáticamente desde **QA** hacia **integration**.\n\nPor favor, revisa y aprueba este PR para mergear de forma manual." \
+            '{title: $title, head: $head, base: $base, body: $body}')
 
-            Este PR fue creado automáticamente luego de pasar las pruebas de QA.
+          echo "➡️ Enviando request al API..."
+          RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
+            -X POST \
+            -H "Authorization: token ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -d "$DATA" \
+            $API_URL)
 
-            Por favor, revisa y aprueba para mergear los cambios a **integration** de forma manual.
-          draft: false
-          delete-branch: true
+          echo "📡 Código de respuesta: $RESPONSE"
+          cat response.json
