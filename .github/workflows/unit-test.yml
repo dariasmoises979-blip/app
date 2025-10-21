@@ -62,7 +62,7 @@ jobs:
       with:
         token: ${{ secrets.GH_TOKEN2 }}
         base: qa
-        branch: dev
+        branch: integration
         title: "QA Approval Needed - Commit ${{ steps.vars.outputs.sha_short }}"
         body: |
           🚀 Se creó este PR automáticamente desde **dev** hacia **qa** después de un merge exitoso desde feature.
