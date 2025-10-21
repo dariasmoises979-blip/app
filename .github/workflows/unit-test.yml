@@ -57,12 +57,12 @@ jobs:
       id: vars
       run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-    - name: Create Pull Request Dev → QA
+    - name: Create Pull Request QA → Integration
       uses: peter-evans/create-pull-request@v6
       with:
         token: ${{ secrets.GH_TOKEN2 }}
-        base: qa
-        branch: integration
+        base: integration
+        branch: qa
         title: "QA Approval Needed - Commit ${{ steps.vars.outputs.sha_short }}"
         body: |
           🚀 Se creó este PR automáticamente desde **dev** hacia **qa** después de un merge exitoso desde feature.
