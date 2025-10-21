@@ -26,7 +26,6 @@ jobs:
 
   create-pr-to-integration:
     name: Create Pull Request from QA to Integration (manual approval)
-    needs: create-pr-to-qa
     if: ${{ needs.create-pr-to-qa.result == 'success' }}
     runs-on: ubuntu-latest
   
