@@ -18,58 +18,61 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-  
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: false  # 🔑 evita sobreescribir el token
-          token: ${{ secrets.GH_TOKEN }}
-  
-      - name: Configure Git credentials
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+      
+      - name: Configure Git
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
-  
-      - name: Merge feature into dev
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Merge to dev
         run: |
           git fetch origin dev
           git checkout dev
           git merge --no-ff ${{ github.ref }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
           git push origin dev
-  
-
 ########################################3
-  create-pr-to-qa:
-    name: Create Pull Request from Dev to QA (manual approval)
-    needs: merge-to-dev
+
+  create-pr:
+    name: Create Pull Request for QA Manual Merge
+    needs: test
+    if: ${{ needs.test.result == 'success' }}
     runs-on: ubuntu-latest
-    if: ${{ needs.merge-to-dev.result == 'success' }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: false
 
-      - name: Configure Git credentials
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git remote remove origin
-          git remote add origin https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git
+      - name: Get commit short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Merge feature branch into dev
-        run: |
-          git fetch origin dev
-          git checkout dev
-          git merge --no-ff ${{ github.ref_name }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
-          git push origin dev
+      - name: Create Pull Request to Integration
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          base: integration
+          branch: qa-${{ steps.vars.outputs.sha_short }}
+          title: "QA Passed - Commit ${{ steps.vars.outputs.sha_short }}"
+          body: |
+            ✅ Los tests en QA han finalizado correctamente.
+
+            Commit asociado: `${{ steps.vars.outputs.sha_short }}`
+
+            Este PR fue creado automáticamente luego de pasar las pruebas de QA.
+
+            Por favor, revisa y aprueba para mergear los cambios a **integration** de forma manual.
+          draft: false
+          delete-branch: true
 
           
 
