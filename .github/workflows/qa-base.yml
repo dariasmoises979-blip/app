@@ -29,7 +29,7 @@ jobs:
     # Job 2: Crear Pull Request usando la API de GitHub
   create-pr:
       name: Create PR to Integration
-      needs: merge-to-dev
+      needs: test
       runs-on: ubuntu-latest
       if: success()
   
