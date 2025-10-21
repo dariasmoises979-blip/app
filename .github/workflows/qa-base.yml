@@ -24,36 +24,3 @@ jobs:
     #  sonar-token: ${{ secrets.SONAR_TOKEN }}
     #  branch: "qa"
 
-  create-pr:
-    name: Create Pull Request for QA Manual Merge
-    needs: test
-    if: ${{ needs.test.result == 'success' }}
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Get commit short SHA
-        id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Create Pull Request to Integration
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GH_TOKEN }}
-          base: integration
-          branch: qa-${{ steps.vars.outputs.sha_short }}
-          title: "QA Passed - Commit ${{ steps.vars.outputs.sha_short }}"
-          body: |
-            ✅ Los tests en QA han finalizado correctamente.
-
-            Commit asociado: `${{ steps.vars.outputs.sha_short }}`
-
-            Este PR fue creado automáticamente luego de pasar las pruebas de QA.
-
-            Por favor, revisa y aprueba para mergear los cambios a **integration** de forma manual.
-          draft: false
-          delete-branch: true

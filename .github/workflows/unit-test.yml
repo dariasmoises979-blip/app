@@ -38,6 +38,41 @@ jobs:
           git checkout dev
           git merge --no-ff ${{ github.ref }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
           git push origin dev
+########################################3
+  create-pr-to-qa:
+    name: Create Pull Request from Dev to QA (manual approval)
+    needs: merge-to-dev
+    runs-on: ubuntu-latest
+    if: ${{ needs.merge-to-dev.result == 'success' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get commit short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request from dev to qa
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          base: qa
+          branch: dev
+          title: "Promote Dev → QA - Commit ${{ steps.vars.outputs.sha_short }}"
+          body: |
+            🚀 El merge de feature a **dev** ha sido exitoso y los tests unitarios pasaron.
+
+            Este PR promueve los cambios a **QA** para validación.
+
+            Por favor, revisa y aprueba este PR para continuar el flujo.
+          draft: false
+          delete-branch: false
+          
+
+          
 
   # create-pr:
   #   name: Create PR from feature to dev
