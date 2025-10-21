@@ -10,34 +10,45 @@ jobs:
     name: Run Unit Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
 
+  # Job: Fusiona automáticamente cualquier rama feature/* en la rama dev
   merge-to-dev:
-    name: Merge to Dev
-    needs: test
+    name: Merge Feature to Dev
+    needs: test                     # Espera que el job "test" haya terminado
     runs-on: ubuntu-latest
-    if: success()
+    if: startsWith(github.ref_name, 'feature/') && success()
+    # Solo se ejecuta si:
+    # - El nombre de la rama actual comienza con "feature/"
+    # - Las pruebas fueron exitosas
+
     permissions:
-      contents: write
-      pull-requests: write
-    
+      contents: write               # Necesario para hacer push al repo
+      pull-requests: write          # (Opcional) Permite crear/actualizar PRs si hiciera falta
+
     steps:
+      # Paso 1: Clonar el repositorio completo
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0                   # Obtiene todo el historial
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
-      
+
+      # Paso 2: Configurar Git para los commits automáticos
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-      
-      - name: Merge to dev
+
+      # Paso 3: Hacer merge desde la rama feature/** actual hacia dev
+      - name: Merge feature into dev
         run: |
-          git fetch origin dev
-          git checkout dev
-          git merge --no-ff ${{ github.ref }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
-          git push origin dev
+          git fetch origin dev                         # Trae la última versión de dev
+          git checkout dev                             # Cambia a la rama dev
+          git merge --no-ff origin/${{ github.ref_name }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
+          # origin/${{ github.ref_name }} asegura que tomamos la versión remota actual de la feature
+          git push origin dev                          # Envía los cambios fusionados a la rama dev
+                                          # Envía los cambios al repositorio remoto
+
 ########################################3
 
   # Workflow: Crea automáticamente un Pull Request desde QA hacia Integration
