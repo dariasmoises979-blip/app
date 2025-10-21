@@ -25,7 +25,7 @@ jobs:
     name: Create PR QA to Integration
     needs: test
     runs-on: ubuntu-latest
-    if: success() && github.head_ref == 'dev'
+    if: success() && github.head_ref == 'qa'
 
     permissions:
       contents: read
