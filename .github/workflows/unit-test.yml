@@ -79,8 +79,8 @@ jobs:
       uses: peter-evans/create-pull-request@v6
       with:
         token: ${{ secrets.GH_TOKEN2 }}   # Usa un token con permisos para crear el PR
-        base: integration                 # Rama destino del PR
-        branch: qa                        # Rama origen del PR
+        base: qa              # Rama destino del PR
+        branch: dev                        # Rama origen del PR
         title: "QA Approval Needed - Commit ${{ steps.vars.outputs.sha_short }}"
         body: |                           # Mensaje que aparecerá dentro del PR
           🚀 Se creó este PR automáticamente desde **dev** hacia **qa** después de un merge exitoso desde feature.
