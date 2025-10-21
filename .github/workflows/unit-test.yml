@@ -57,7 +57,7 @@ jobs:
     # Job 2: Crear Pull Request usando la API de GitHub
   create-pr:
       name: Create PR to QA
-      needs: test
+      needs: merge-to-dev
       runs-on: ubuntu-latest
       if: success()
   
