@@ -41,7 +41,7 @@ jobs:
 ########################################3
 
   create-pr:
-    name: Create Pull Request for QA Manual Merge
+    name: Create Pull Request for QA Manual Merge 
     needs: test
     if: ${{ needs.test.result == 'success' }}
     runs-on: ubuntu-latest
