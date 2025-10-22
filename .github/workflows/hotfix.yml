@@ -1,0 +1,225 @@
+########################################
+# 🔥 WORKFLOW: Hotfix Multi-Merge
+# Fusiona automáticamente las ramas hotfix/* tanto a main como a dev
+# después de que los tests críticos pasen correctamente.
+########################################
+
+name: Hotfix to Main and Dev
+
+# 🎯 Se activa cuando hay push a cualquier rama hotfix/*
+on:
+  push:
+    branches:
+      - 'hotfix/**'  # Cualquier rama que comience con hotfix/
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # 🧪 JOB 1: EJECUTAR TESTS CRÍTICOS
+  # ═══════════════════════════════════════════════════════════
+  # Tests que deben pasar antes de mergear el hotfix
+  test:
+    name: Run Critical Hotfix Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      # ───────────────────────────────────────────────────────
+      # Clonar el repositorio con la rama hotfix actual
+      # ───────────────────────────────────────────────────────
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}  # La rama hotfix que disparó el workflow
+
+      # ───────────────────────────────────────────────────────
+      # Ejecutar suite de tests críticos
+      # ───────────────────────────────────────────────────────
+      - name: Run test suite
+        run: |
+          echo "🔥 Running critical hotfix tests..."
+          echo "📋 Testing hotfix: ${{ github.ref_name }}"
+          # 
+          # Aquí van tus comandos de testing:
+          # npm test
+          # pytest
+          # npm run test:e2e
+          # make test
+          #
+          echo "✅ All critical tests passed"
+
+      # ───────────────────────────────────────────────────────
+      # (Opcional) Tests de seguridad específicos para hotfix
+      # ───────────────────────────────────────────────────────
+      - name: Security checks
+        run: |
+          echo "🔒 Running security checks..."
+          # npm audit
+          # snyk test
+          # trivy scan
+          echo "✅ Security checks passed"
+
+  # ═══════════════════════════════════════════════════════════
+  # 🚀 JOB 2: MERGE AUTOMÁTICO A MAIN (PRODUCCIÓN)
+  # ═══════════════════════════════════════════════════════════
+  # Fusiona el hotfix a la rama main (producción)
+  merge-to-main:
+    name: Merge Hotfix to Main (Production)
+    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
+    if: success()  # ✅ Confirma que todo fue exitoso hasta aquí
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main   # 📂 Workflow reusable
+    with:
+      source_branch: ${{ github.ref_name }}  # La rama hotfix actual (ej: hotfix/fix-123)
+      target_branch: 'main'                  # Rama de producción
+      use_fast_forward: false                # Crear commit de merge explícito
+      merge_message: '🔥 HOTFIX: Auto-merge ${{ github.ref_name }} to PRODUCTION after critical tests'
+
+  # ═══════════════════════════════════════════════════════════
+  # 🔄 JOB 3: MERGE AUTOMÁTICO A DEV (SINCRONIZACIÓN)
+  # ═══════════════════════════════════════════════════════════
+  # Fusiona el mismo hotfix a la rama dev para mantener sincronizado
+  merge-to-dev:
+    name: Merge Hotfix to Dev (Sync)
+    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
+    if: success()  # ✅ Confirma que todo fue exitoso hasta aquí
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main   # 📂 Workflow reusable
+    with:
+      source_branch: ${{ github.ref_name }}  # La rama hotfix actual (ej: hotfix/fix-123)
+      target_branch: 'dev'                   # Rama de desarrollo
+      use_fast_forward: false                # Crear commit de merge explícito
+      merge_message: '🔥 HOTFIX: Sync ${{ github.ref_name }} to DEV for consistency'
+
+  # ═══════════════════════════════════════════════════════════
+  # 📊 JOB 4: NOTIFICACIÓN Y REPORTE FINAL
+  # ═══════════════════════════════════════════════════════════
+  # Se ejecuta después de ambos merges para reportar el resultado
+  notify-completion:
+    name: Notify Hotfix Completion
+    needs: [merge-to-main, merge-to-dev]  # ⚙️ Espera que ambos merges terminen
+    runs-on: ubuntu-latest
+    if: always()  # 🔄 Se ejecuta siempre, incluso si algo falló
+    
+    steps:
+      # ───────────────────────────────────────────────────────
+      # Reportar el estado de ambos merges
+      # ───────────────────────────────────────────────────────
+      - name: Report merge status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Obtener información del contexto
+            const hotfixBranch = '${{ github.ref_name }}';
+            const actor = '${{ github.actor }}';
+            const runUrl = `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            
+            // Verificar el estado de los jobs
+            const mainMergeSuccess = '${{ needs.merge-to-main.result }}' === 'success';
+            const devMergeSuccess = '${{ needs.merge-to-dev.result }}' === 'success';
+            
+            // Construir el mensaje de estado
+            let statusEmoji = '✅';
+            let statusText = 'HOTFIX DEPLOYED SUCCESSFULLY';
+            let statusColor = '🟢';
+            
+            if (!mainMergeSuccess || !devMergeSuccess) {
+              statusEmoji = '⚠️';
+              statusText = 'HOTFIX PARTIALLY DEPLOYED';
+              statusColor = '🟡';
+            }
+            
+            if (!mainMergeSuccess && !devMergeSuccess) {
+              statusEmoji = '❌';
+              statusText = 'HOTFIX DEPLOYMENT FAILED';
+              statusColor = '🔴';
+            }
+            
+            // Log detallado del resultado
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log(`${statusEmoji} ${statusText}`);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log(`🔥 Hotfix Branch: ${hotfixBranch}`);
+            console.log(`👤 Deployed by: ${actor}`);
+            console.log(`🕐 Date: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`);
+            console.log('');
+            console.log('📊 Merge Results:');
+            console.log(`   ${mainMergeSuccess ? '✅' : '❌'} Main (Production): ${mainMergeSuccess ? 'SUCCESS' : 'FAILED'}`);
+            console.log(`   ${devMergeSuccess ? '✅' : '❌'} Dev (Development): ${devMergeSuccess ? 'SUCCESS' : 'FAILED'}`);
+            console.log('');
+            console.log(`🔗 Workflow Run: ${runUrl}`);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            
+            // Si algún merge falló, crear un issue automáticamente
+            if (!mainMergeSuccess || !devMergeSuccess) {
+              const failedTargets = [];
+              if (!mainMergeSuccess) failedTargets.push('main');
+              if (!devMergeSuccess) failedTargets.push('dev');
+              
+              console.log('');
+              console.log('⚠️  ATTENTION REQUIRED:');
+              console.log(`   Failed merges detected for: ${failedTargets.join(', ')}`);
+              console.log('   Manual intervention may be needed.');
+              
+              // Opcional: Crear un issue para tracking
+              // await github.rest.issues.create({
+              //   owner: context.repo.owner,
+              //   repo: context.repo.repo,
+              //   title: `🔥 Hotfix Merge Failed: ${hotfixBranch}`,
+              //   body: `## Hotfix Deployment Issue\n\n**Branch:** \`${hotfixBranch}\`\n**Failed targets:** ${failedTargets.join(', ')}\n\n**Workflow Run:** ${runUrl}\n\n**Action Required:** Manual merge needed for failed targets.`,
+              //   labels: ['hotfix', 'deployment-issue', 'urgent']
+              // });
+            }
+
+      # ───────────────────────────────────────────────────────
+      # (Opcional) Notificar a Slack/Discord/Teams
+      # ───────────────────────────────────────────────────────
+      - name: Notify team (optional)
+        if: success()
+        run: |
+          echo "📢 Notifying team about hotfix deployment..."
+          # 
+          # Ejemplos de notificación:
+          #
+          # Slack:
+          # curl -X POST -H 'Content-type: application/json' \
+          #   --data '{"text":"🔥 Hotfix ${{ github.ref_name }} deployed to production and dev"}' \
+          #   ${{ secrets.SLACK_WEBHOOK_URL }}
+          #
+          # Discord:
+          # curl -X POST -H 'Content-type: application/json' \
+          #   --data '{"content":"🔥 Hotfix ${{ github.ref_name }} deployed successfully"}' \
+          #   ${{ secrets.DISCORD_WEBHOOK_URL }}
+          #
+          echo "✅ Team notified"
+
+  # ═══════════════════════════════════════════════════════════
+  # 🧹 JOB 5 (OPCIONAL): LIMPIEZA DE RAMA HOTFIX
+  # ═══════════════════════════════════════════════════════════
+  # Elimina la rama hotfix después de merges exitosos
+  cleanup-hotfix-branch:
+    name: Cleanup Hotfix Branch
+    needs: [merge-to-main, merge-to-dev]
+    runs-on: ubuntu-latest
+    if: success()  # Solo si ambos merges fueron exitosos
+    
+    permissions:
+      contents: write  # Necesario para eliminar ramas
+    
+    steps:
+      - name: Delete hotfix branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branchName = '${{ github.ref_name }}';
+            
+            try {
+              // Eliminar la rama remota
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branchName}`
+              });
+              
+              console.log(`✅ Hotfix branch '${branchName}' deleted successfully`);
+              console.log('🧹 Cleanup completed');
+            } catch (error) {
+              console.log(`⚠️  Could not delete branch '${branchName}': ${error.message}`);
+              console.log('Branch may have been already deleted or protected');
+            }

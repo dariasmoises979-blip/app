@@ -10,7 +10,9 @@ on:
   push:
     branches:
       - integration     
-
+  # ───────────────────────────────────────────────────────────
+  # Job 1: Llamar al workflow reusable de tests
+  # ───────────────────────────────────────────────────────────
 jobs:
   test:
     name: Run Qa Tests
