@@ -1,0 +1,38 @@
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+  security-events: write
+
+name: Run Qa Tests
+
+on:
+  push:
+    branches:
+      - qa      
+  # ───────────────────────────────────────────────────────────
+  # Job 1: Llamar al workflow reusable de tests
+  # ───────────────────────────────────────────────────────────
+jobs:
+  test:
+    name: Run Qa Tests
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa.yml@main
+    #with:
+    #  sonar-token: ${{ secrets.SONAR_TOKEN }}
+    #  branch: "qa"
+
+
+
+  # ───────────────────────────────────────────────────────────
+  # Job 2: Llamar al workflow reusable
+  # ───────────────────────────────────────────────────────────
+  create-pr-to-integration:
+    name: Create PR to Integration
+    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main  # 📂 Ruta al workflow reusable
+    with:
+      source_branch: 'qa'                    # Desde qa
+      target_branch: 'integration'                     # Hacia integration
+      pr_title: '🚀 Deploy qa to integration'
+      environment: 'integration'
+      labels: 'automated,deployment,integration,qa'
