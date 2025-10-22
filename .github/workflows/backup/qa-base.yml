@@ -1,53 +1,25 @@
-name: Run Unit Tests and Merge to Dev
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+  security-events: write
+
+name: Run Qa Tests
 
 on:
   push:
-    branches: 
-      - feature/**
+    branches:
+      - qa      
 
 jobs:
   test:
-    name: Run Unit Tests
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
+    name: Run Qa Tests
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa.yml@main
+    #with:
+    #  sonar-token: ${{ secrets.SONAR_TOKEN }}
+    #  branch: "qa"
 
-  # Job: Fusiona automáticamente cualquier rama feature/* en la rama dev
-  merge-to-dev:
-    name: Merge Feature to Dev
-    needs: test                     # Espera que el job "test" haya terminado
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref_name, 'feature/') && success()
-    # Solo se ejecuta si:
-    # - El nombre de la rama actual comienza con "feature/"
-    # - Las pruebas fueron exitosas
 
-    permissions:
-      contents: write               # Necesario para hacer push al repo
-      pull-requests: write          # (Opcional) Permite crear/actualizar PRs si hiciera falta
-
-    steps:
-      # Paso 1: Clonar el repositorio completo
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0                   # Obtiene todo el historial
-          token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: true
-
-      # Paso 2: Configurar Git para los commits automáticos
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      # Paso 3: Hacer merge desde la rama feature/** actual hacia dev
-      - name: Merge feature into dev
-        run: |
-          git fetch origin dev                         # Trae la última versión de dev
-          git checkout dev                             # Cambia a la rama dev
-          git merge --no-ff origin/${{ github.ref_name }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
-          # origin/${{ github.ref_name }} asegura que tomamos la versión remota actual de la feature
-          git push origin dev                          # Envía los cambios fusionados a la rama dev
-                                          # Envía los cambios al repositorio remoto
 
 ########################################3
 
@@ -56,8 +28,8 @@ jobs:
 
     # Job 2: Crear Pull Request usando la API de GitHub
   create-pr:
-      name: Create PR to QA
-      needs: merge-to-dev
+      name: Create PR to Integration
+      needs: test
       runs-on: ubuntu-latest
       if: success()
   
@@ -72,12 +44,12 @@ jobs:
             script: |
               const { owner, repo } = context.repo;
               
-              // Verificar si ya existe un PR abierto de dev a qa
+              // Verificar si ya existe un PR abierto de qa a integration
               const { data: existingPRs } = await github.rest.pulls.list({
                 owner,
                 repo,
-                head: `${owner}:dev`,
-                base: 'qa',
+                head: `${owner}:qa`,
+                base: 'integration',
                 state: 'open'
               });
   
@@ -100,12 +72,12 @@ jobs:
               const { data: pr } = await github.rest.pulls.create({
                 owner,
                 repo,
-                title: '🚀 Deploy DEV to QA',
-                head: 'dev',
-                base: 'qa',
-                body: `## Automatic deployment from dev to qa
+                title: '🚀 Deploy QA to INTEGRATION',
+                head: 'qa',
+                base: 'integration',
+                body: `## Automatic deployment from qa to integration
                 
-                This PR contains the latest changes from \`dev\` branch ready for QA environment.
+                This PR contains the latest changes from \`qa\` branch ready for INTEGRATION environment.
   
                 ### 📋 Pre-merge Checklist
                 - [ ] Code has been reviewed
@@ -126,7 +98,7 @@ jobs:
                               owner,
                               repo,
                               issue_number: pr.number,
-                              labels: ['automated', 'deployment', 'qa']
+                              labels: ['automated', 'deployment', 'integration']
                             });
                 
                             console.log(`✅ Pull Request created: #${pr.number}`);

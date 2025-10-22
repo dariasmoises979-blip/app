@@ -1,0 +1,20 @@
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+  security-events: write
+
+name: Run Qa Tests
+
+on:
+  push:
+    branches:
+      - integration     
+
+jobs:
+  test:
+    name: Run Qa Tests
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/integration.yml@main
+    #with:
+    #  sonar-token: ${{ secrets.SONAR_TOKEN }}
+    #  branch: "qa"
