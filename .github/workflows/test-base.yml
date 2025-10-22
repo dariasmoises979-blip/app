@@ -10,132 +10,33 @@ jobs:
     name: Run Unit Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
 
-  # Job: Fusiona automáticamente cualquier rama feature/* en la rama dev
+  # ───────────────────────────────────────────────────────────
+  # Job 2: Llamar al workflow reusable de merge
+  # ───────────────────────────────────────────────────────────
   merge-to-dev:
-    name: Merge Feature to Dev
-    needs: test                     # Espera que el job "test" haya terminado
-    runs-on: ubuntu-latest
+    name: Merge to Dev
+    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
+    # ✅ Validación adicional: solo si es una rama feature
     if: startsWith(github.ref_name, 'feature/') && success()
-    # Solo se ejecuta si:
-    # - El nombre de la rama actual comienza con "feature/"
-    # - Las pruebas fueron exitosas
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main   # 📂 Ruta al workflow reusable
+    with:
+      source_branch: ${{ github.ref_name }}   # La rama feature actual
+      target_branch: 'dev'                     # Fusionar hacia dev
+      use_fast_forward: false                  # Crear commit de merge explícito
+      merge_message: '🔀 Auto-merge from ${{ github.ref_name }} after successful tests'
 
-    permissions:
-      contents: write               # Necesario para hacer push al repo
-      pull-requests: write          # (Opcional) Permite crear/actualizar PRs si hiciera falta
 
-    steps:
-      # Paso 1: Clonar el repositorio completo
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0                   # Obtiene todo el historial
-          token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: true
+  # ───────────────────────────────────────────────────────────
+  # Job 3: Llamar al workflow reusable
+  # ───────────────────────────────────────────────────────────
+  create-pr-to-integration:
+    name: Create PR to Integration
+    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main  # 📂 Ruta al workflow reusable
+    with:
+      source_branch: 'dev'                    # Desde dev
+      target_branch: 'qa'                     # Hacia qa
+      pr_title: '🚀 Deploy DEV to QA'
+      environment: 'qa'
+      labels: 'automated,deployment,qa,dev'
 
-      # Paso 2: Configurar Git para los commits automáticos
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      # Paso 3: Hacer merge desde la rama feature/** actual hacia dev
-      - name: Merge feature into dev
-        run: |
-          git fetch origin dev                         # Trae la última versión de dev
-          git checkout dev                             # Cambia a la rama dev
-          git merge --no-ff origin/${{ github.ref_name }} -m "Auto-merge from ${{ github.ref_name }} after successful tests"
-          # origin/${{ github.ref_name }} asegura que tomamos la versión remota actual de la feature
-          git push origin dev                          # Envía los cambios fusionados a la rama dev
-                                          # Envía los cambios al repositorio remoto
-
-########################################3
-
-  # Workflow: Crea automáticamente un Pull Request desde QA hacia Dev
-  # cuando el merge a dev fue exitoso y las pruebas pasaron correctamente.
-
-    # Job 2: Crear Pull Request usando la API de GitHub
-  create-pr:
-      name: Create PR to QA
-      needs: merge-to-dev
-      runs-on: ubuntu-latest
-      if: success()
-  
-      permissions:
-        contents: read
-        pull-requests: write
-  
-      steps:
-        - name: Create Pull Request via API
-          uses: actions/github-script@v7
-          with:
-            script: |
-              const { owner, repo } = context.repo;
-              
-              // Verificar si ya existe un PR abierto de dev a qa
-              const { data: existingPRs } = await github.rest.pulls.list({
-                owner,
-                repo,
-                head: `${owner}:dev`,
-                base: 'qa',
-                state: 'open'
-              });
-  
-              if (existingPRs.length > 0) {
-                console.log(`✅ PR already exists: #${existingPRs[0].number}`);
-                console.log(`URL: ${existingPRs[0].html_url}`);
-                
-                // Actualizar el PR existente con un comentario
-                await github.rest.issues.createComment({
-                  owner,
-                  repo,
-                  issue_number: existingPRs[0].number,
-                  body: `🔄 Dev branch updated. Tests passed successfully.\n\n**Workflow run:** https://github.com/${owner}/${repo}/actions/runs/${context.runId}`
-                });
-                
-                return;
-              }
-  
-              // Crear nuevo PR
-              const { data: pr } = await github.rest.pulls.create({
-                owner,
-                repo,
-                title: '🚀 Deploy DEV to QA',
-                head: 'dev',
-                base: 'qa',
-                body: `## Automatic deployment from dev to qa
-                
-                This PR contains the latest changes from \`dev\` branch ready for QA environment.
-  
-                ### 📋 Pre-merge Checklist
-                - [ ] Code has been reviewed
-                - [ ] All tests are passing ✅
-                - [ ] Ready for QA environment
-                
-                ### 🔗 Links
-                - **Workflow run:** https://github.com/${owner}/${repo}/actions/runs/${context.runId}
-                - **Commit:** ${context.sha}
-                
-                ---
-                *Auto-generated by GitHub Actions on ${new Date().toISOString()}*`,
-                              draft: false
-                            });
-                
-                            // Añadir labels al PR
-                            await github.rest.issues.addLabels({
-                              owner,
-                              repo,
-                              issue_number: pr.number,
-                              labels: ['automated', 'deployment', 'qa']
-                            });
-                
-                            console.log(`✅ Pull Request created: #${pr.number}`);
-                            console.log(`URL: ${pr.html_url}`);
-                
-                            // Opcional: Asignar revisores automáticamente
-                            // await github.rest.pulls.requestReviewers({
-                            //   owner,
-                            //   repo,
-                            //   pull_number: pr.number,
-                            //   reviewers: ['tu-usuario']
-                            // });
