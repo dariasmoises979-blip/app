@@ -41,9 +41,8 @@ jobs:
   docker-image:
     name: Create Docker Image and Push to Docker Hub
     needs: test  # ⚙️ Solo se ejecuta si los tests pasan
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build.yml@main
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
     with:
-      dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-      dockerhub-access-token: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
-      image-name: 'app-qa'
-      tag: 'latest'
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+   
