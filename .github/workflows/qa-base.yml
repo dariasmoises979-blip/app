@@ -43,9 +43,10 @@ jobs:
     needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si los tests pasan
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
     with:
-      docker_image: flask-info-app
-      dockerhub_username: dariasmoises979  
+      image_name: "dariasmoises979/flask-info-app"
+      image_tag: "latest"
+      enable_sonar: true  # 👈 Activa SonarCloud
     secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       
    
