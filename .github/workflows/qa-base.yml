@@ -43,6 +43,8 @@ jobs:
     needs: test  # ⚙️ Solo se ejecuta si los tests pasan
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
     with:
-      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
-      dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+      docker_image: flask-info-app
+      dockerhub_username: dariasmoises979  
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
    
