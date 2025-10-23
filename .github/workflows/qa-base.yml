@@ -40,7 +40,7 @@ jobs:
   # ──────────────────────────────────────────────────────────
   docker-image:
     name: Create Docker Image and Push to Docker Hub
-    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
+    needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si los tests pasan
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
     with:
       docker_image: flask-info-app
