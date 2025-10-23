@@ -11,7 +11,7 @@ on:
     branches:
       - qa      
   # ───────────────────────────────────────────────────────────
-  # Job 1: Llamar al workflow reusable de tests
+  # Job 1: Ejecutar tests 
   # ───────────────────────────────────────────────────────────
 jobs:
   test:
@@ -21,10 +21,8 @@ jobs:
     #  sonar-token: ${{ secrets.SONAR_TOKEN }}
     #  branch: "qa"
 
-
-
   # ───────────────────────────────────────────────────────────
-  # Job 2: Llamar al workflow reusable
+  # Job 2: Crear PR a Integration
   # ───────────────────────────────────────────────────────────
   create-pr-to-integration:
     name: Create PR to Integration
@@ -36,3 +34,17 @@ jobs:
       pr_title: '🚀 Deploy qa to integration'
       environment: 'integration'
       labels: 'automated,deployment,integration,qa'
+
+  # ──────────────────────────────────────────────────────────
+  # Job 3: Create image docker and push to docker hub
+  # ──────────────────────────────────────────────────────────
+  docker-image:
+    name: Create Docker Image and Push to Docker Hub
+    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
+    with:
+      docker_image: flask-info-app
+      dockerhub_username: dariasmoises979  
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+   
