@@ -23,8 +23,8 @@ jobs:
   # ──────────────────────────────────────────────────────────
   # Job 2: Security Scan and Docker Image Creation
   # ──────────────────────────────────────────────────────────
-  docker-image:
-    name: Create Docker Image and Push to Docker Hub
+  security:
+    name: Security Scan and Docker Image Creation
     needs: test  # ⚙️ Solo se ejecuta si los tests pasan
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/security.yml@main
     with:

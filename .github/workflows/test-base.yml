@@ -52,8 +52,16 @@ jobs:
       docker_image: mi-aplicacion
       dockerhub_username: dariasmoises979
       environment: qa
-      dockerfile_path: ./Dockerfile
-      build_context: .
-      additional_tags: v1.0.0,stable
+      
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas del build
+      dockerfile_path: ./app-repo/local/Dockerfile
+      build_context: ./app-repo                    # ✅ Sin barra final (correcto)
+      
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
