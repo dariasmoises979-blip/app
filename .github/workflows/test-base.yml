@@ -43,7 +43,9 @@ jobs:
       labels: 'automated,deployment,qa,dev'
 
 
-      #test build
+  # ───────────────────────────────────────────────────────────
+  # Job 4: Llamar al workflow reusable
+  # ───────────────────────────────────────────────────────────
   build-image:
     name: Build Docker Image
     needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si los tests pasan
