@@ -52,8 +52,17 @@ jobs:
       docker_image: mi-aplicacion
       dockerhub_username: dariasmoises979
       environment: qa
-      dockerfile_path: ./Dockerfile
-      build_context: .
-      additional_tags: v1.0.0,stable
+      
+      # Configurar repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas ajustadas al repo clonado
+      dockerfile_path: ./app-repo/local/Dockerfile
+      build_context: ./app-repo/
+      
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Solo si el repo es privado:
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
