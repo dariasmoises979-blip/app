@@ -53,16 +53,15 @@ jobs:
       dockerhub_username: dariasmoises979
       environment: qa
       
-      # Configurar repo externo
+      # Configuración del repo externo
       external_repo: dariasmoises979-blip/app
       external_repo_ref: main
       external_repo_path: ./app-repo
       
-      # Rutas ajustadas al repo clonado
+      # Rutas del build
       dockerfile_path: ./app-repo/local/Dockerfile
-      build_context: ./app-repo/
+      build_context: ./app-repo                    # ✅ Sin barra final (correcto)
       
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      # Solo si el repo es privado:
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
