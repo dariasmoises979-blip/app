@@ -20,3 +20,17 @@ jobs:
     #with:
     #  sonar-token: ${{ secrets.SONAR_TOKEN }}
     #  branch: "qa"
+  # ──────────────────────────────────────────────────────────
+  # Job 2: Security Scan and Docker Image Creation
+  # ──────────────────────────────────────────────────────────
+  security:
+    name: Security Scan and Docker Image Creation
+    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/security.yml@main
+    with:
+      image_name: "dariasmoises979/flask-info-app"
+      image_tag: "latest"
+      enable_sonar: true  # 👈 Activa SonarCloud
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      

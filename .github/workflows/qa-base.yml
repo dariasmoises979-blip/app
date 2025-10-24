@@ -17,9 +17,9 @@ jobs:
   test:
     name: Run Qa Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa.yml@main
-    #with:
-    #  sonar-token: ${{ secrets.SONAR_TOKEN }}
-    #  branch: "qa"
+    with:
+      sonar-token: ${{ secrets.SONAR_TOKEN }}
+      branch: "qa"
 
   # ───────────────────────────────────────────────────────────
   # Job 2: Crear PR a Integration
@@ -35,18 +35,5 @@ jobs:
       environment: 'integration'
       labels: 'automated,deployment,integration,qa'
 
-  # ──────────────────────────────────────────────────────────
-  # Job 3: Create image docker and push to docker hub
-  # ──────────────────────────────────────────────────────────
-  docker-image:
-    name: Create Docker Image and Push to Docker Hub
-    needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si los tests pasan
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
-    with:
-      image_name: "dariasmoises979/flask-info-app"
-      image_tag: "latest"
-      enable_sonar: true  # 👈 Activa SonarCloud
-    secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      
+
    
