@@ -29,7 +29,7 @@ jobs:
 
 
   # ───────────────────────────────────────────────────────────
-  # Job 3: Llamar al workflow reusable
+  # Job 3: Crear PR de dev a qa
   # ───────────────────────────────────────────────────────────
   create-pr-to-integration:
     name: Create PR to Integration
@@ -44,7 +44,7 @@ jobs:
 
 
   # ───────────────────────────────────────────────────────────
-  # Job 4: Llamar al workflow reusable
+  # Job 4: Build Docker Image
   # ───────────────────────────────────────────────────────────
   build-image:
     name: Build Docker Image
