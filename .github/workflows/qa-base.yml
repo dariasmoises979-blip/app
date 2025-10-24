@@ -20,7 +20,7 @@ jobs:
     with:
       branch: "qa"
     secrets:
-      sonar-token: ${{ secrets.SONAR_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
 
   # ───────────────────────────────────────────────────────────
