@@ -42,3 +42,12 @@ jobs:
       environment: 'qa'
       labels: 'automated,deployment,qa,dev'
 
+      #test build
+  build-image:
+    name: Build Docker Image
+    needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si los tests pasan
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main  # 📂 Ruta al workflow reusable
+    with:
+      dockerfile_path: './Dockerfile'        # Ruta al Dockerfile
+      docker-imagen: 'my-app-image'              # Nombre de la imagen
+      image_tag: '${{ github.sha }}'          # Tag basado en el SHA del commit
