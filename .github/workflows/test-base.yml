@@ -50,7 +50,7 @@ jobs:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main  # 📂 Ruta al workflow reusable
     with:
       docker_image: mi-aplicacion
-      dockerhub_username: miusuario
+      dockerhub_username: dariasmoises979
       environment: qa
       dockerfile_path: ./Dockerfile
       build_context: .
