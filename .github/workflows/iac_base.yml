@@ -86,18 +86,23 @@ jobs:
   ########################################
   # 🔹 LLAMADA AL WORKFLOW REUTILIZABLE
   ########################################
+########################################
+# 🔹 LLAMADA AL WORKFLOW REUTILIZABLE
+########################################
   run-iac-security-scan:
     name: 🛡️ Ejecutar análisis de seguridad IaC
     needs: detect-changes
     # Solo ejecutar si hay cambios O es ejecución manual/programada
     if: |
-      needs.detect-changes.outputs.has_iac_changes == 'true' ||
+      always() && 
+      !cancelled() &&
+      (needs.detect-changes.outputs.has_iac_changes == 'true' ||
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'schedule'
+      github.event_name == 'schedule')
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/infrasec-iac.yml@main
     with:
       source_repo: ${{ github.repository }}
-      source_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.ref_name }}
+      source_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.head_ref || github.ref_name }}
     secrets:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
