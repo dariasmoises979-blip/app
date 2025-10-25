@@ -1,0 +1,141 @@
+########################################
+# 🛡️ WORKFLOW BASE: Trigger para InfraSec Analysis
+# Autor: @turingsecurity
+# Este workflow invoca el reusable de análisis IaC
+########################################
+
+name: IaC Security Pipeline
+
+on:
+  # Ejecutar en cada push a ramas principales
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+    paths:
+      - '**.tf'           # Terraform
+      - '**.tfvars'
+      - '**.yaml'         # Kubernetes/Helm
+      - '**.yml'
+      - 'Chart.yaml'      # Helm Charts
+      - '**.ansible'      # Ansible
+      - 'playbook*.yml'
+  
+  # Ejecutar en PRs
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - '**.tf'
+      - '**.tfvars'
+      - '**.yaml'
+      - '**.yml'
+      - 'Chart.yaml'
+      - '**.ansible'
+      - 'playbook*.yml'
+  
+  # Permitir ejecución manual
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch a analizar'
+        required: false
+        default: 'main'
+        type: string
+  
+  # Programar escaneo semanal
+  schedule:
+    - cron: '0 2 * * 1'  # Lunes a las 2 AM UTC
+
+# Permisos necesarios
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  ########################################
+  # 🔹 PRE-CHECK: Detectar cambios en IaC
+  ########################################
+  detect-changes:
+    name: 🔍 Detectar cambios en IaC
+    runs-on: ubuntu-latest
+    outputs:
+      has_iac_changes: ${{ steps.filter.outputs.iac }}
+    steps:
+      - name: 📦 Checkout
+        uses: actions/checkout@v4
+      
+      - name: 🔎 Filtrar cambios
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            iac:
+              - '**.tf'
+              - '**.tfvars'
+              - '**.yaml'
+              - '**.yml'
+              - 'Chart.yaml'
+              - '**.ansible'
+              - 'playbook*.yml'
+
+  ########################################
+  # 🔹 LLAMADA AL WORKFLOW REUTILIZABLE
+  ########################################
+  run-iac-security-scan:
+    name: 🛡️ Ejecutar análisis de seguridad IaC
+    needs: detect-changes
+    # Solo ejecutar si hay cambios O es ejecución manual/programada
+    if: |
+      needs.detect-changes.outputs.has_iac_changes == 'true' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule'
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/infrasec-iac.yml@main
+    with:
+      source_repo: ${{ github.repository }}
+      source_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.ref_name }}
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  ########################################
+  # 🔹 NOTIFICACIÓN POST-ANÁLISIS
+  ########################################
+  notify-results:
+    name: 📢 Notificar resultados
+    needs: run-iac-security-scan
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: 📊 Resumen del análisis
+        run: |
+          echo "## 🛡️ IaC Security Scan Completado" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repositorio**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📋 Revisa los artefactos y la pestaña **Security** para detalles." >> $GITHUB_STEP_SUMMARY
+      
+      - name: 💬 Comentar en PR (si aplica)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🛡️ IaC Security Analysis Complete\n\n` +
+                    `✅ El análisis de seguridad de infraestructura ha finalizado.\n\n` +
+                    `📊 **Herramientas ejecutadas:**\n` +
+                    `- Terraform (tfsec, checkov)\n` +
+                    `- Ansible Lint\n` +
+                    `- Helm Lint + kube-score\n` +
+                    `- YAML Lint\n\n` +
+                    `🔍 Revisa los artefactos del workflow para ver resultados detallados.`
+            })
