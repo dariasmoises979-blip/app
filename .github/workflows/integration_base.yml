@@ -44,7 +44,7 @@ jobs:
       build_context: ./app-repo
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
 
   # ──────────────────────────────────────────────────────────
   # Job 3: Security Scan
@@ -89,7 +89,7 @@ jobs:
       build_context: ./app-repo
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
 
   # ──────────────────────────────────────────────────────────
   # Job 5: Main Pipeline (si quieres usarlo)
@@ -120,5 +120,5 @@ jobs:
         enable_sonar: true
       secrets:
         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
+        EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

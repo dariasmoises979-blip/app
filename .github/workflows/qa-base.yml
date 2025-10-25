@@ -9,10 +9,12 @@ name: Run Qa Tests
 on:
   push:
     branches:
-      - qa      
-  # ───────────────────────────────────────────────────────────
-  # Job 1: Ejecutar tests 
-  # ───────────────────────────────────────────────────────────
+      - qa
+  workflow_dispatch:  # ✅ Permite ejecución manual
+
+# ───────────────────────────────────────────────────────────
+# Job 1: Ejecutar tests 
+# ───────────────────────────────────────────────────────────
 jobs:
   test:
     name: Run Qa Tests
@@ -31,25 +33,38 @@ jobs:
         -Dsonar.coverage.exclusions=**/test/**,**/tests/**
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    
-      
   
   # ───────────────────────────────────────────────────────────
   # Job 2: Crear PR a Integration
   # ───────────────────────────────────────────────────────────
   create-pr-to-integration:
     name: Create PR to Integration
-    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main  # 📂 Ruta al workflow reusable
+    needs: test
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
     with:
-      source_branch: 'qa'                    # Desde qa
-      target_branch: 'integration'                     # Hacia integration
+      source_branch: 'qa'
+      target_branch: 'integration'
       pr_title: '🚀 Deploy qa to integration'
       environment: 'integration'
       labels: 'automated,deployment,integration,qa'
 
   # ───────────────────────────────────────────────────────────
-  # Job 3: Despliegue a GKS QA (solo si se aprueba manualmente)
+  # Job 3: Saludo Manual con Aprobación (SOLO MANUAL)
+  # ───────────────────────────────────────────────────────────
+  saludar:
+    name: Decir Hola Mundo
+    needs: create-pr-to-integration  # ⚙️ Espera a que termine el PR
+    if: github.event_name == 'workflow_dispatch'  # 🎯 SOLO se ejecuta manualmente
+    runs-on: ubuntu-latest
+    environment: qa  # 🔐 Requiere aprobación manual
+    
+    steps:
+      - name: Hola Mundo
+        run: |
+          echo "¡Hola Mundo!"
+
+  # ───────────────────────────────────────────────────────────
+  # Job 4: Despliegue a GKS QA (comentado)
   # ───────────────────────────────────────────────────────────
   # deploy-gks-qa:
   #   name: Deploy to GKS QA
@@ -57,12 +72,3 @@ jobs:
   #   uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
   #   with:
   #     deploy_to_gks: true
-  saludar:
-    name: Decir Hola Mundo
-    runs-on: ubuntu-latest
-    environment: qa
-    
-    steps:
-      - name: Hola Mundo
-        run: |
-          echo "¡Hola Mundo!"
