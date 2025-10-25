@@ -40,7 +40,7 @@ jobs:
       external_repo_path: ./app-repo
       
       # Rutas del build
-      dockerfile_path: ./app-repo/local/Dockerfile
+      dockerfile_path: local/Dockerfile
       build_context: ./app-repo
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -118,7 +118,20 @@ jobs:
         # Opciones
         enable_security_scan: true
         enable_sonar: true
+      
+        # Configuración de SonarCloud
+        sonar_project_base_dir: "./pipeline-build"
+        sonar_args: >
+          -Dsonar.organization=dariasmoises979-blip
+          -Dsonar.projectKey=dariasmoises979-blip_app
+          -Dsonar.projectName=app
+          -Dsonar.python.version=3.10
+          -Dsonar.sources=system_info_app
+          -Dsonar.tests=system_info_app/test
+          -Dsonar.test.inclusions=**/test/**,**/tests/**
+          -Dsonar.coverage.exclusions=**/test/**,**/tests/**
+      
       secrets:
         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+        EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
