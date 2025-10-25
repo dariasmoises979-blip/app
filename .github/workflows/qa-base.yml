@@ -48,5 +48,27 @@ jobs:
       environment: 'integration'
       labels: 'automated,deployment,integration,qa'
 
+  # ───────────────────────────────────────────────────────────
+  # Job 3: Despliegue a GKS QA (solo si se aprueba manualmente)
+  # ───────────────────────────────────────────────────────────
+  deploy-gks-qa:
+    name: Deploy to GKS QA
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_to_gks == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to GKS QA
+        run: |
+          echo "🚀 Deploying to GKS QA environment..."
+          # Aquí van tus comandos de despliegue a GKS
+          # Por ejemplo:
+          # gcloud container clusters get-credentials your-cluster --zone=your-zone
+          # kubectl apply -f k8s/qa/
+        env:
+          GKS_PROJECT: ${{ secrets.GKS_PROJECT }}
+          GKS_CLUSTER: ${{ secrets.GKS_CLUSTER }}
 
    
