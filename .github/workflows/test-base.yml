@@ -11,6 +11,11 @@ jobs:
   test:
     name: Run Unit Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
+    with:
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: .
     secrets:
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
   # ───────────────────────────────────────────────────────────
