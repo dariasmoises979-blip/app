@@ -73,3 +73,16 @@ jobs:
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+
+ #############################################################################
+ # ───────────────────────────────────────────────────────────
+  # Job 5: Mensaje de confirmación
+  # ───────────────────────────────────────────────────────────
+  say-hello:
+    name: Confirmación de modificación independiente
+    needs: [build-image]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mensaje final
+        run: echo "✅ Se demuestra que se puede modificar el workflow por proyecto sin afectar a otros proyectos."     
