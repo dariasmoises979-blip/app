@@ -1,0 +1,30 @@
+name: Notificar a Slack
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+      - hotfix/*
+      - release/*
+      - develop
+      - integration
+      - pre
+      - staging
+      - pro
+      - qa
+      - dev
+  pull_request:
+    types: [opened, reopened, synchronize, closed] # incluye merge y actualizaciones
+
+jobs:
+  notificar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send GitHub Action data to a Slack workflow
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          payload-delimiter: "_"
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: webhook-trigger
