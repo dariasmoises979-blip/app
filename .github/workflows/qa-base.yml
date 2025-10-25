@@ -57,3 +57,12 @@ jobs:
   #   uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
   #   with:
   #     deploy_to_gks: true
+  saludar:
+    name: Decir Hola Mundo
+    runs-on: ubuntu-latest
+    environment: qa
+    
+    steps:
+      - name: Hola Mundo
+        run: |
+          echo "¡Hola Mundo!"
