@@ -72,4 +72,4 @@ jobs:
       
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
