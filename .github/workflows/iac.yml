@@ -94,7 +94,7 @@ jobs:
       needs.detect-changes.outputs.has_iac_changes == 'true' ||
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule'
-    uses: ariasmoises979-blip/pipeline-build/.github/workflows/infrasec-iac.yml@main
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/infrasec-iac.yml@main
     with:
       source_repo: ${{ github.repository }}
       source_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.ref_name }}
