@@ -12,7 +12,7 @@ jobs:
     name: Run Unit Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
     secrets:
-      APP_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
   # ───────────────────────────────────────────────────────────
   # Job 2: Llamar al workflow reusable de merge
   # ───────────────────────────────────────────────────────────
