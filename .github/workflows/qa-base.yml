@@ -60,7 +60,17 @@ jobs:
         run: |
           echo "¡Hola Mundo!"
 
-          
+  # ───────────────────────────────────────────────────────────
+  # Job 3.1: Saludo Manual con Aprobación (SOLO MANUAL)
+  # ───────────────────────────────────────────────────────────
+  saludar-2:
+    runs-on: 'ubuntu-latest'
+    environment: 'qa'
+    needs: create-pr-to-integration
+    steps:
+      - name: Hola Mundo
+        run: |
+          echo "¡Hola Mundo!"     
 
 
           
