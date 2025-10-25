@@ -17,7 +17,7 @@ jobs:
       external_repo_ref: main
       external_repo_path: ./app-repo
     secrets:
-      EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
   # ───────────────────────────────────────────────────────────
   # Job 2: Llamar al workflow reusable de merge
   # ───────────────────────────────────────────────────────────
