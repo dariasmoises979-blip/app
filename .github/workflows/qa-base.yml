@@ -53,6 +53,7 @@ jobs:
   # ───────────────────────────────────────────────────────────
   saludar:
     name: Decir Hola Mundo
+    needs: create-pr-to-integration  # ⚙️ Espera a que termine el PR
     if: github.event_name == 'workflow_dispatch'  # 🎯 SOLO se ejecuta manualmente
     runs-on: ubuntu-latest
     environment: qa  # 🔐 Requiere aprobación manual
