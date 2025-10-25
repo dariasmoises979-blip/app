@@ -19,6 +19,18 @@ jobs:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa.yml@main
     with:
       branch: "qa"
+      projectBaseDir: "./pipeline-build"
+      sonar_args: >
+        -Dsonar.organization=dariasmoises979-blip
+        -Dsonar.projectKey=dariasmoises979-blip_app
+        -Dsonar.projectName=app
+        -Dsonar.python.version=3.10
+        -Dsonar.sources=system_info_app
+        -Dsonar.tests=system_info_app/test
+        -Dsonar.test.inclusions=**/test/**,**/tests/**
+        -Dsonar.coverage.exclusions=**/test/**,**/tests/**
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     
       
 
