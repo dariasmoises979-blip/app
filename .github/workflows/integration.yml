@@ -20,17 +20,61 @@ jobs:
     #with:
     #  sonar-token: ${{ secrets.SONAR_TOKEN }}
     #  branch: "qa"
+
+  # ──────────────────────────────────────────────────────────
+  # Job 2: Crear  Docker Image and Push to Docker Hub
+  # ──────────────────────────────────────────────────────────
+  build-image:
+    name: Build Docker Image
+    needs: test
+    strategy:
+      matrix:
+        environment: [pre, staging, pro]  # 👈 Array de entornos
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: ${{ matrix.environment }}  # 👈 Usa el valor de la matriz
+    
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app  
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+    
+      # Rutas del build
+      dockerfile_path: ./app-repo/local/Dockerfile
+      build_context: ./app-repo
+    
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
+
   # ──────────────────────────────────────────────────────────
   # Job 2: Security Scan and Docker Image Creation
   # ──────────────────────────────────────────────────────────
   security:
     name: Security Scan and Docker Image Creation
-    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
+    needs: build-image  # 👈 Espera a que se construyan las imágenes
+    strategy:
+      matrix:
+        environment: [pre, staging, pro]
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/security.yml@main
     with:
-      image_name: "dariasmoises979/flask-info-app"
-      image_tag: "latest"
-      enable_sonar: true  # 👈 Activa SonarCloud
+      image_name: "dariasmoises979/mi-aplicacion"
+      image_tag: ${{ matrix.environment }}  # 👈 Escanea cada tag
+      enable_sonar: true
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────
+  # Job 3: prueba uses  
+  # ──────────────────────────────────────────────────────────
+  pruebas:
+    name: Build Docker Image
+    needs: test
+    strategy:
+      matrix:
+        environment: [pre, staging, pro]  # 👈 Array de entornos
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-hybrid.yml@main
+  
       
