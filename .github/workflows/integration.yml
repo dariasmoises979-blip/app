@@ -65,6 +65,7 @@ jobs:
       enable_sonar: true
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   # ──────────────────────────────────────────────────────────
   # Job 3: prueba uses  
