@@ -1,30 +1,48 @@
-name: Notificar a Slack
+name: GitHub Actions Demo
+run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
 
 on:
   push:
     branches:
       - main
       - feature/*
-      - hotfix/*
-      - release/*
-      - develop
-      - integration
-      - pre
-      - staging
-      - pro
-      - qa
       - dev
-  pull_request:
-    types: [opened, reopened, synchronize, closed] # incluye merge y actualizaciones
 
 jobs:
-  notificar:
+  custom-job:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Send GitHub Action data to a Slack workflow
+      - run: echo "Workflow triggered"
+
+      - name: Slack Notification Triggered
         uses: slackapi/slack-github-action@v2.1.1
         with:
-          payload-delimiter: "_"
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: webhook-trigger
+          webhook-type: incoming-webhook
+          payload: |
+            text: "Greetings!"
+
+      - name: Slack Notification Triggered v2
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: "${{ secrets.SLACK_WEBHOOK_URL }}"
+          webhook-type: incoming-webhook
+          payload: |
+            text: "🚀 Workflow triggered"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "🚀 *Branch triggered*\n\n"
+              - type: "section"
+                fields:
+                  - type: "mrkdwn"
+                    text: "*Branch:*\n`${{ github.ref_name }}`\n"
+                  - type: "mrkdwn"
+                    text: "*Actor:*\n`${{ github.actor }}`\n"
+                  - type: "mrkdwn"
+                    text: "*Workflow:*\n`${{ github.run_number }}`\n"
+                  - type: "mrkdwn"
+                    text: "*Repository:*\n`${{ github.repository }}`\n"
+      
+      - run: echo "Workflow finished"
