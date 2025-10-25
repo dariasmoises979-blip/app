@@ -15,7 +15,7 @@ jobs:
       # Configuración del repo externo
       external_repo: dariasmoises979-blip/app
       external_repo_ref: main
-      external_repo_path: .
+      external_repo_path: ./app-repo
     secrets:
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
   # ───────────────────────────────────────────────────────────
