@@ -49,4 +49,16 @@ jobs:
       labels: 'automated,deployment,integration,qa'
 
 
+  # ──────────────────────────────────────────────────────────
+  # Job 3: Create image docker and push to docker hub
+  # ──────────────────────────────────────────────────────────
+  docker-image:
+    name: Create Docker Image and Push to Docker Hub
+    needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si los tests pasan
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
+    with:
+      docker_image: flask-info-app
+      dockerhub_username: dariasmoises979  
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
    
