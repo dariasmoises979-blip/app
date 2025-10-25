@@ -1,0 +1,42 @@
+########################################
+
+🚀 CALLER WORKFLOW: InfraSec & IaC Analysis
+Ejecuta el workflow reusable de análisis IaC
+Compatible con Terraform, Ansible, Helm, YAML
+
+########################################
+
+name: Run InfraSec & IaC Analysis
+
+on:
+workflow_dispatch:
+inputs:
+source_repo:
+description: "Repositorio con IaC a analizar (owner/repo)"
+required: true
+default: "org/infrastructure-repo"
+source_ref:
+description: "Branch o tag"
+required: false
+default: "main"
+
+push:
+branches:
+- main
+- develop
+paths:
+- '/*.tf'
+- '/.yaml'
+- '**/.yml'
+- '/Chart.yaml'
+- '/ansible/**'
+
+jobs:
+iac-security-analysis:
+name: 🛡️ Ejecutar InfraSec & IaC Quality Analysis
+uses: ./.github/workflows/infra-analysis.yml
+with:
+source_repo: ${{ github.event.inputs.source_repo || github.repository }}
+source_ref: ${{ github.event.inputs.source_ref || github.ref_name }}
+secrets:
+GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

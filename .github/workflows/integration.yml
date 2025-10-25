@@ -65,6 +65,7 @@ jobs:
       enable_sonar: true
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   # ──────────────────────────────────────────────────────────
   # Job 3: prueba uses  
@@ -76,5 +77,13 @@ jobs:
       matrix:
         environment: [pre, staging, pro]  # 👈 Array de entornos
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-hybrid.yml@main
+  
+  pruebas2:
+    name: Build 
+    needs: test
+    strategy:
+      matrix:
+        environment: [pre, staging, pro]  # 👈 Array de entornos
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/bmain-pipeline.yml@main
   
       
