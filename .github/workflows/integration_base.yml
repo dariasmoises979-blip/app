@@ -95,31 +95,30 @@ jobs:
   # Job 5: Main Pipeline (si quieres usarlo)
   # ──────────────────────────────────────────────────────────
   main-pipeline:
-    name: Main Pipeline - ${{ matrix.environment }}
-    needs: test
-    strategy:
-      matrix:
-        environment: [pre, staging, pro]
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/main-pipeline.yml@main
-    with:
-      docker_image: mi-aplicacion
-      dockerhub_username: dariasmoises979
-      environment: ${{ matrix.environment }}
-      
-      # Configuración del repo externo
-      external_repo: dariasmoises979-blip/app
-      external_repo_ref: main
-      external_repo_path: ./app-repo
-      
-      # Rutas del build
-      dockerfile_path: ./app-repo/local/Dockerfile
-      build_context: ./app-repo
-      
-      # Opciones
-      enable_security_scan: true
-      enable_sonar: true
-    secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      
+      name: Pipeline Completo - ${{ matrix.environment }}
+      needs: test
+      strategy:
+        matrix:
+          environment: [pre, staging, pro]
+      uses: dariasmoises979-blip/pipeline-build/.github/workflows/main-pipeline.yml@main
+      with:
+        docker_image: mi-aplicacion
+        dockerhub_username: dariasmoises979
+        environment: ${{ matrix.environment }}
+        
+        # Configuración del repo externo
+        external_repo: dariasmoises979-blip/app
+        external_repo_ref: main
+        external_repo_path: ./app-repo
+        
+        # Rutas del build
+        dockerfile_path: ./app-repo/local/Dockerfile
+        build_context: ./app-repo
+        
+        # Opciones
+        enable_security_scan: true
+        enable_sonar: true
+      secrets:
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
