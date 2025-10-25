@@ -78,4 +78,12 @@ jobs:
         environment: [pre, staging, pro]  # 👈 Array de entornos
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-hybrid.yml@main
   
+  pruebas2:
+    name: Build 
+    needs: test
+    strategy:
+      matrix:
+        environment: [pre, staging, pro]  # 👈 Array de entornos
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/bmain-pipeline.yml@main
+  
       
