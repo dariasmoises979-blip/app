@@ -1,5 +1,6 @@
 📄 README.md — versión resumida para GitHub
-# 🖥️ system_info_app..hot
+# 🖥️ system_info_app..24ffd
+
 
 Aplicación web simple construida con **Python + Flask** para mostrar información del sistema donde se ejecuta.
 
