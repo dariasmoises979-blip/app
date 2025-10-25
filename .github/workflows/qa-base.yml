@@ -33,23 +33,9 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     
       
-
- # ───────────────────────────────────────────────────────────
- # Job 2: Análisis con SonarCloud
- # ───────────────────────────────────────────────────────────
-  sonar-analysis:
-    name: Analizar con SonarCloud
-    uses: SonarSource/sonarcloud-github-action@v2
-    with:
-      projectBaseDir: ${{ inputs.projectBaseDir }}
-      args: ${{ inputs.sonar_args }}
-    env:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_HOST_URL: https://sonarcloud.io
-  
   
   # ───────────────────────────────────────────────────────────
-  # Job 3: Crear PR a Integration
+  # Job 2: Crear PR a Integration
   # ───────────────────────────────────────────────────────────
   create-pr-to-integration:
     name: Create PR to Integration
