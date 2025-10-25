@@ -53,23 +53,12 @@ jobs:
   # ───────────────────────────────────────────────────────────
   deploy-gks-qa:
     name: Deploy to GKS QA
-    needs: test
-    if: github.event_name == 'workflow_dispatch' && inputs.deploy_to_gks == true
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy to GKS QA
-        run: |
-          echo "🚀 Deploying to GKS QA environment..."
-          # Aquí van tus comandos de despliegue a GKS
-          # Por ejemplo:
-          # gcloud container clusters get-credentials your-cluster --zone=your-zone
-          # kubectl apply -f k8s/qa/
-        env:
-          GKS_PROJECT: ${{ secrets.GKS_PROJECT }}
-          GKS_CLUSTER: ${{ secrets.GKS_CLUSTER }}
-
-
+    needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si el PR se crea correctamente
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main  # 📂 Ruta al workflow reusable
+    secrets:
+      GKS_PROJECT: ${{ secrets.GKS_PROJECT }}
+      GKS_CLUSTER: ${{ secrets.GKS_CLUSTER }}
+    with:
+      deploy_to_gks: true  # ⚙️ Desplegar a GKS QA
+      
    
