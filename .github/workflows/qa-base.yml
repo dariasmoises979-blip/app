@@ -51,9 +51,9 @@ jobs:
   # ───────────────────────────────────────────────────────────
   # Job 3: Despliegue a GKS QA (solo si se aprueba manualmente)
   # ───────────────────────────────────────────────────────────
-  deploy-gks-qa:
-    name: Deploy to GKS QA
-    needs: create-pr-to-integration
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
-    with:
-      deploy_to_gks: true
+  # deploy-gks-qa:
+  #   name: Deploy to GKS QA
+  #   needs: create-pr-to-integration
+  #   uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
+  #   with:
+  #     deploy_to_gks: true
