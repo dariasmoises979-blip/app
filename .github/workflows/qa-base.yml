@@ -15,12 +15,10 @@ on:
   # ───────────────────────────────────────────────────────────
 jobs:
   test:
-    name: Run Qa Tests
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa.yml@main
+    uses: SonarSource/sonarcloud-github-action@v2
     with:
-      branch: "qa"
-      projectBaseDir: "./pipeline-build"
-      sonar_args: >
+      projectBaseDir: ./pipeline-build
+      args: >
         -Dsonar.organization=dariasmoises979-blip
         -Dsonar.projectKey=dariasmoises979-blip_app
         -Dsonar.projectName=app
@@ -29,8 +27,9 @@ jobs:
         -Dsonar.tests=system_info_app/test
         -Dsonar.test.inclusions=**/test/**,**/tests/**
         -Dsonar.coverage.exclusions=**/test/**,**/tests/**
-    secrets:
+    env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: https://sonarcloud.io
 
 
 
