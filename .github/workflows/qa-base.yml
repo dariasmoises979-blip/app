@@ -55,10 +55,10 @@ jobs:
     name: Deploy to GKS QA
     needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si el PR se crea correctamente
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main  # 📂 Ruta al workflow reusable
-    secrets:
-      GKS_PROJECT: ${{ secrets.GKS_PROJECT }}
-      GKS_CLUSTER: ${{ secrets.GKS_CLUSTER }}
+    #secrets:
+    #  GKS_PROJECT: ${{ secrets.GKS_PROJECT }}
+    #  GKS_CLUSTER: ${{ secrets.GKS_CLUSTER }}
     with:
       deploy_to_gks: true  # ⚙️ Desplegar a GKS QA
-      
+
    
