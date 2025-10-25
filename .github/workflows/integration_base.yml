@@ -40,7 +40,7 @@ jobs:
       external_repo_path: ./app-repo
       
       # Rutas del build
-      dockerfile_path: ./app-repo/local/Dockerfile
+      dockerfile_path: local/Dockerfile
       build_context: ./app-repo
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
