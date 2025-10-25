@@ -22,47 +22,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Enviar notificación a Slack
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            # 🔹 Notificación de push
-            curl -X POST -H 'Content-type: application/json' \
-            --data "{
-              \"text\": \":rocket: *Nuevo push en* <${{ github.server_url }}/${{ github.repository }}|${{ github.repository }}> por *${{ github.actor }}* en la rama *${{ github.ref_name }}*.\n<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|Ver commit>\"
-            }" \
-            $SLACK_WEBHOOK_URL
-          
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            if [ "${{ github.event.action }}" = "opened" ]; then
-              # 🔹 PR creado
-              curl -X POST -H 'Content-type: application/json' \
-              --data "{
-                \"text\": \":sparkles: *Nuevo Pull Request* creado por *${{ github.actor }}* en <${{ github.server_url }}/${{ github.repository }}|${{ github.repository }}>.\nTítulo: *${{ github.event.pull_request.title }}*\n<${{ github.event.pull_request.html_url }}|Ver Pull Request>\"
-              }" \
-              $SLACK_WEBHOOK_URL
-            elif [ "${{ github.event.action }}" = "synchronize" ]; then
-              # 🔹 PR actualizado (nuevo commit)
-              curl -X POST -H 'Content-type: application/json' \
-              --data "{
-                \"text\": \":arrows_counterclockwise: *Pull Request actualizado* por *${{ github.actor }}*.\n<${{ github.event.pull_request.html_url }}|Ver Pull Request>\"
-              }" \
-              $SLACK_WEBHOOK_URL
-            elif [ "${{ github.event.action }}" = "closed" ] && [ "${{ github.event.pull_request.merged }}" = "true" ]; then
-              # 🔹 PR mergeado
-              curl -X POST -H 'Content-type: application/json' \
-              --data "{
-                \"text\": \":tada: *Pull Request mergeado!* por *${{ github.actor }}*.\nTítulo: *${{ github.event.pull_request.title }}*\n<${{ github.event.pull_request.html_url }}|Ver Pull Request>\"
-              }" \
-              $SLACK_WEBHOOK_URL
-            elif [ "${{ github.event.action }}" = "closed" ]; then
-              # 🔹 PR cerrado sin merge
-              curl -X POST -H 'Content-type: application/json' \
-              --data "{
-                \"text\": \":no_entry: *Pull Request cerrado sin merge* por *${{ github.actor }}*.\nTítulo: *${{ github.event.pull_request.title }}*\n<${{ github.event.pull_request.html_url }}|Ver Pull Request>\"
-              }" \
-              $SLACK_WEBHOOK_URL
-            fi
-          fi
-
+      - name: Send GitHub Action data to a Slack workflow
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          payload-delimiter: "_"
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: webhook-trigger
