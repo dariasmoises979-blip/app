@@ -77,13 +77,31 @@ jobs:
       matrix:
         environment: [pre, staging, pro]  # 👈 Array de entornos
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-hybrid.yml@main
-  
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: qa
+      
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas del build
+      dockerfile_path: ./app-repo/local/Dockerfile
+      build_context: ./app-repo                    # ✅ Sin barra final (correcto)
+      
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
+
+      
   pruebas2:
     name: Build 
     needs: test
     strategy:
       matrix:
         environment: [pre, staging, pro]  # 👈 Array de entornos
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/bmain-pipeline.yml@main
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/main-pipeline.yml@main
   
       
