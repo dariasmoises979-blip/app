@@ -14,24 +14,24 @@ permissions:
   
 # 🎯 Triggers del workflow
 on:
-  # Push a ramas específicas
   push:
     branches:
       - main
-
+      - 'integration'  # <-- agregar para detectar pushes desde integration
     paths:
-      # Solo ejecutar si hay cambios en código o manifiestos
       - 'src/**'
       - 'kubernetes/**'
       - '.github/workflows/**'
   
-  # Pull requests
   pull_request:
     branches:
       - main
+    # Esto permite PRs desde integration a main
+    # Puedes agregar otras ramas si quieres
     paths:
       - 'src/**'
       - 'kubernetes/**'
+
   
   # Ejecución manual con parámetros
   workflow_dispatch:
