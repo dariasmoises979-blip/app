@@ -1,0 +1,62 @@
+name: Base Deployment Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - pre
+          - prod
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: true
+        type: string
+
+  push:
+    branches:
+      - main
+   
+
+jobs:
+  # Despliegue automático para qa (cuando se hace push a qa)
+  deploy-dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    uses: ./.github/workflows/deployment-main.yml
+    with:
+      environment: qa
+      image_tag: ${{ github.sha }}
+    secrets: inherit
+
+  # Despliegue automático para staging (cuando se hace push a main)
+  deploy-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/deployment-main.yml
+    with:
+      environment: staging
+      image_tag: ${{ github.sha }}
+    secrets: inherit
+
+  # Despliegue manual para pre
+  deploy-pre:
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'pre'
+    uses: ./.github/workflows/deployment-main.yml
+    with:
+      environment: pre
+      image_tag: ${{ inputs.image_tag }}
+      requires_approval: true
+    secrets: inherit
+
+  # Despliegue manual para prod
+  deploy-prod:
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'prod'
+    uses: ./.github/workflows/deployment-main.yml
+    with:
+      environment: prod
+      image_tag: ${{ inputs.image_tag }}
+      requires_approval: true
+    secrets: inherit
