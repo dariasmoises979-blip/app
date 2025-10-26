@@ -9,10 +9,12 @@ name: Run Qa Tests
 on:
   push:
     branches:
-      - qa      
-  # ───────────────────────────────────────────────────────────
-  # Job 1: Ejecutar tests 
-  # ───────────────────────────────────────────────────────────
+      - qa
+  workflow_dispatch:  # ✅ Permite ejecución manual
+
+# ───────────────────────────────────────────────────────────
+# Job 1: Ejecutar tests 
+# ───────────────────────────────────────────────────────────
 jobs:
   test:
     name: Run Qa Tests
@@ -31,34 +33,55 @@ jobs:
         -Dsonar.coverage.exclusions=**/test/**,**/tests/**
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    
-      
   
   # ───────────────────────────────────────────────────────────
   # Job 2: Crear PR a Integration
   # ───────────────────────────────────────────────────────────
   create-pr-to-integration:
     name: Create PR to Integration
-    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main  # 📂 Ruta al workflow reusable
+    needs: test
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
     with:
-      source_branch: 'qa'                    # Desde qa
-      target_branch: 'integration'                     # Hacia integration
+      source_branch: 'qa'
+      target_branch: 'integration'
       pr_title: '🚀 Deploy qa to integration'
       environment: 'integration'
       labels: 'automated,deployment,integration,qa'
 
+  # ───────────────────────────────────────────────────────────
+  # Job 3: Saludo Manual con Aprobación (SOLO MANUAL)
+  # ───────────────────────────────────────────────────────────
+  saludar:
+    runs-on: 'ubuntu-latest'
+    environment: 'qa'
+    needs: create-pr-to-integration
+    steps:
+      - name: Hola Mundo
+        run: |
+          echo "¡Hola Mundo!"
 
-  # ──────────────────────────────────────────────────────────
-  # Job 3: Create image docker and push to docker hub
-  # ──────────────────────────────────────────────────────────
-  docker-image:
-    name: Create Docker Image and Push to Docker Hub
-    needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si los tests pasan
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/docker-publish.yml@main
-    with:
-      docker_image: flask-info-app
-      dockerhub_username: dariasmoises979  
-    secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-   
+  # ───────────────────────────────────────────────────────────
+  # Job 3.1: Saludo Manual con Aprobación (SOLO MANUAL)
+  # ───────────────────────────────────────────────────────────
+  saludar-2:
+    runs-on: 'ubuntu-latest'
+    environment: 'qa'
+    needs: create-pr-to-integration
+    steps:
+      - name: Hola Mundo
+        run: |
+          echo "¡Hola Mundo!"     
+
+
+          
+    
+
+  # ───────────────────────────────────────────────────────────
+  # Job 4: Despliegue a GKS QA (comentado)
+  # ───────────────────────────────────────────────────────────
+  # deploy-gks-qa:
+  #   name: Deploy to GKS QA
+  #   needs: create-pr-to-integration
+  #   uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
+  #   with:
+  #     deploy_to_gks: true

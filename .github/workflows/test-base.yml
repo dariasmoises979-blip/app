@@ -11,7 +11,13 @@ jobs:
   test:
     name: Run Unit Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
-
+    with:
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+    secrets:
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
   # ───────────────────────────────────────────────────────────
   # Job 2: Llamar al workflow reusable de merge
   # ───────────────────────────────────────────────────────────
@@ -66,4 +72,17 @@ jobs:
       
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      EXTERNAL_REPO_TOKEN: ${{ secrets.GH2_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+
+ #############################################################################
+ # ───────────────────────────────────────────────────────────
+  # Job 5: Mensaje de confirmación
+  # ───────────────────────────────────────────────────────────
+  say-hello:
+    name: Confirmación de modificación independiente
+    needs: [build-image]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mensaje final
+        run: echo "✅ Se demuestra que se puede modificar el workflow por proyecto sin afectar a otros proyectos."     
