@@ -59,7 +59,7 @@ jobs:
     with:
       image_name: "dariasmoises979/mi-aplicacion"
       image_tag: ${{ matrix.environment }}
-      dockerhub_username: dariasmoises979  # ✅ AGREGADO
+      dockerhub_username: dariasmoises979
       enable_sonar: true
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
