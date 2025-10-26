@@ -1,21 +1,237 @@
-name: Desplegar aplicación a GKE
+########################################
+# 🚀 WORKFLOW BASE: Build, Push & Update K8s
+# Pipeline completo que construye la imagen Docker,
+# la sube a Docker Hub y actualiza los manifiestos K8s
+########################################
 
+name: Deploy and Update K8s
+
+# 🎯 Triggers del workflow
 on:
+  # Push a ramas específicas
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/**'
+  
+  # Pull requests
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  
+  # Ejecución manual con parámetros
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Selecciona el entorno de despliegue'
+        description: 'Entorno de deployment'
         required: true
         type: choice
         options:
-          - development
+          - dev
           - staging
-          - production
+          - pre
+          - pro
+        default: 'dev'
+      skip_build:
+        description: 'Saltar build de imagen (solo actualizar K8s)'
+        required: false
+        type: boolean
+        default: false
+      create_pr:
+        description: 'Crear PR en lugar de commit directo'
+        required: false
+        type: boolean
+        default: false
+
+# ⚙️ Variables de entorno globales
+env:
+  # 🐳 Configuración de Docker Hub
+  DOCKERHUB_USERNAME: tu-usuario-dockerhub  # ⚠️ CAMBIAR POR TU USUARIO
+  DOCKER_IMAGE_NAME: mi-aplicacion           # ⚠️ CAMBIAR POR TU IMAGEN
+  
+  # 📁 Configuración de rutas
+  DOCKERFILE_PATH: ./Dockerfile
+  BUILD_CONTEXT: .
+  K8S_MANIFESTS_PATH: kubernetes/entornos
+  
+  # 🔧 Configuración de Git
+  GIT_USER_NAME: GitHub Actions Bot
+  GIT_USER_EMAIL: github-actions[bot]@users.noreply.github.com
 
 jobs:
-  deploy:
-    name: Llamar al workflow reusable de despliegue
-    uses: ./.github/workflows/deploy-reusable.yml
+  # ═══════════════════════════════════════════════════════════
+  # 🎯 JOB 1: DETERMINAR ENTORNO
+  # ═══════════════════════════════════════════════════════════
+  determine-environment:
+    name: Determine Deployment Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set_env.outputs.environment }}
+      should_deploy: ${{ steps.set_env.outputs.should_deploy }}
+    
+    steps:
+      - name: Determine environment from branch
+        id: set_env
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🎯 DETERMINANDO ENTORNO DE DEPLOYMENT"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Si es workflow_dispatch, usar el input
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+            SHOULD_DEPLOY="true"
+            echo "📝 Modo: Manual (workflow_dispatch)"
+          else
+            # Determinar entorno según la rama
+            BRANCH_NAME="${{ github.ref_name }}"
+            echo "🌿 Rama: ${BRANCH_NAME}"
+            
+            case "${BRANCH_NAME}" in
+              main|master)
+                ENVIRONMENT="pro"
+                SHOULD_DEPLOY="true"
+                ;;
+              release/*)
+                ENVIRONMENT="pre"
+                SHOULD_DEPLOY="true"
+                ;;
+              develop)
+                ENVIRONMENT="staging"
+                SHOULD_DEPLOY="true"
+                ;;
+              *)
+                ENVIRONMENT="dev"
+                SHOULD_DEPLOY="false"  # No deployar en ramas feature
+                ;;
+            esac
+          fi
+          
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "should_deploy=${SHOULD_DEPLOY}" >> $GITHUB_OUTPUT
+          
+          echo ""
+          echo "✅ Entorno determinado: ${ENVIRONMENT}"
+          echo "🚀 Debe deployar: ${SHOULD_DEPLOY}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # ═══════════════════════════════════════════════════════════
+  # 🐳 JOB 2: BUILD & PUSH DOCKER IMAGE
+  # ═══════════════════════════════════════════════════════════
+  build-and-push:
+    name: Build & Push Docker Image
+    needs: determine-environment
+    if: |
+      needs.determine-environment.outputs.should_deploy == 'true' &&
+      github.event.inputs.skip_build != 'true'
+    uses: ./.github/workflows/reusable-build-push-docker.yml
     with:
-      environment: ${{ github.event.inputs.environment }}
-    secrets: inherit
+      docker_image: ${{ env.DOCKER_IMAGE_NAME }}
+      dockerhub_username: ${{ env.DOCKERHUB_USERNAME }}
+      environment: ${{ needs.determine-environment.outputs.environment }}
+      dockerfile_path: ${{ env.DOCKERFILE_PATH }}
+      build_context: ${{ env.BUILD_CONTEXT }}
+      # Ejemplo de repositorio externo (descomentar si necesitas)
+      # external_repo: 'dariasmoises979-blip/app'
+      # external_repo_ref: 'main'
+      # external_repo_path: './external'
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      # EXTERNAL_REPO_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════
+  # 🔄 JOB 3: UPDATE KUBERNETES MANIFESTS
+  # ═══════════════════════════════════════════════════════════
+  update-kubernetes:
+    name: Update Kubernetes Manifests
+    needs: [determine-environment, build-and-push]
+    # Si skip_build es true, no esperar al build (pero sí al determine-environment)
+    if: |
+      always() &&
+      needs.determine-environment.outputs.should_deploy == 'true' &&
+      (needs.build-and-push.result == 'success' || github.event.inputs.skip_build == 'true')
+    uses: ./.github/workflows/reusable-update-k8s-images.yml
+    with:
+      docker_image: ${{ env.DOCKER_IMAGE_NAME }}
+      dockerhub_username: ${{ env.DOCKERHUB_USERNAME }}
+      environment: ${{ needs.determine-environment.outputs.environment }}
+      commit_sha: ${{ github.sha }}
+      k8s_manifests_path: ${{ env.K8S_MANIFESTS_PATH }}
+      git_user_name: ${{ env.GIT_USER_NAME }}
+      git_user_email: ${{ env.GIT_USER_EMAIL }}
+      create_pr: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
+    secrets:
+      GH_PAT: ${{ secrets.GH_PAT }}
+
+  # ═══════════════════════════════════════════════════════════
+  # 📊 JOB 4: DEPLOYMENT SUMMARY
+  # ═══════════════════════════════════════════════════════════
+  deployment-summary:
+    name: Deployment Summary
+    needs: [determine-environment, build-and-push, update-kubernetes]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Generate deployment summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 RESUMEN DEL DEPLOYMENT"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "🎯 Información General:"
+          echo "   • Entorno: ${{ needs.determine-environment.outputs.environment }}"
+          echo "   • Rama: ${{ github.ref_name }}"
+          echo "   • Commit: ${{ github.sha }}"
+          echo "   • Actor: ${{ github.actor }}"
+          echo "   • Evento: ${{ github.event_name }}"
+          echo ""
+          echo "🐳 Build de Imagen:"
+          if [[ "${{ github.event.inputs.skip_build }}" == "true" ]]; then
+            echo "   ⏭️  Saltado (skip_build=true)"
+          else
+            echo "   • Estado: ${{ needs.build-and-push.result }}"
+            if [[ "${{ needs.build-and-push.result }}" == "success" ]]; then
+              echo "   • Imagen: ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ needs.determine-environment.outputs.environment }}-${GITHUB_SHA:0:7}"
+              echo "   • Docker Hub: https://hub.docker.com/r/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}"
+            fi
+          fi
+          echo ""
+          echo "🔄 Actualización de K8s:"
+          echo "   • Estado: ${{ needs.update-kubernetes.result }}"
+          echo "   • Ruta: ${{ env.K8S_MANIFESTS_PATH }}"
+          echo "   • Modo: ${{ github.event.inputs.create_pr == 'true' && 'Pull Request' || 'Commit Directo' }}"
+          echo ""
+          echo "✅ Estado General:"
+          if [[ "${{ needs.build-and-push.result }}" == "success" || "${{ github.event.inputs.skip_build }}" == "true" ]] && \
+             [[ "${{ needs.update-kubernetes.result }}" == "success" ]]; then
+            echo "   🎉 DEPLOYMENT COMPLETADO EXITOSAMENTE"
+          else
+            echo "   ⚠️  DEPLOYMENT CON PROBLEMAS - Revisar logs"
+          fi
+          echo ""
+          echo "🔗 Enlaces:"
+          echo "   • Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "   • Repositorio: ${{ github.server_url }}/${{ github.repository }}"
+          echo "   • Commit: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      # Notificación de error si algo falló
+      - name: Report failure
+        if: |
+          needs.build-and-push.result == 'failure' || 
+          needs.update-kubernetes.result == 'failure'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "❌ DEPLOYMENT FALLIDO"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━
