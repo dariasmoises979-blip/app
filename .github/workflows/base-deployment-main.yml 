@@ -1,10 +1,11 @@
 ########################################
-# 🚀 WORKFLOW BASE: Build, Push & Update K8s
-# Pipeline completo que construye la imagen Docker,
-# la sube a Docker Hub y actualiza los manifiestos K8s
+# 🔄 WORKFLOW BASE: Find Latest Image & Update K8s
+# Busca la última imagen Docker en Docker Hub y
+# actualiza los manifiestos de Kubernetes automáticamente
+# (NO construye imágenes nuevas)
 ########################################
 
-name: Deploy and Update K8s
+name: Update K8s from Docker Hub
 
 # 🎯 Triggers del workflow
 on:
@@ -14,19 +15,20 @@ on:
       - main
       - develop
       - 'release/**'
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.github/**'
+    paths:
+      # Solo ejecutar si hay cambios en código o manifiestos
+      - 'src/**'
+      - 'kubernetes/**'
+      - '.github/workflows/**'
   
   # Pull requests
   pull_request:
     branches:
       - main
       - develop
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    paths:
+      - 'src/**'
+      - 'kubernetes/**'
   
   # Ejecución manual con parámetros
   workflow_dispatch:
@@ -41,16 +43,20 @@ on:
           - pre
           - pro
         default: 'dev'
-      skip_build:
-        description: 'Saltar build de imagen (solo actualizar K8s)'
-        required: false
-        type: boolean
-        default: false
       create_pr:
         description: 'Crear PR en lugar de commit directo'
         required: false
         type: boolean
         default: false
+      tag_pattern:
+        description: 'Patrón de tag a buscar (ej: pro-*, staging-*). Deja vacío para usar entorno-*'
+        required: false
+        type: string
+        default: ''
+  
+  # Ejecución programada (cada hora para verificar nuevas imágenes)
+  schedule:
+    - cron: '0 * * * *'  # Cada hora en punto
 
 # ⚙️ Variables de entorno globales
 env:
@@ -59,8 +65,6 @@ env:
   DOCKER_IMAGE_NAME: mi-aplicacion           # ⚠️ CAMBIAR POR TU IMAGEN
   
   # 📁 Configuración de rutas
-  DOCKERFILE_PATH: ./Dockerfile
-  BUILD_CONTEXT: .
   K8S_MANIFESTS_PATH: kubernetes/entornos
   
   # 🔧 Configuración de Git
@@ -77,6 +81,7 @@ jobs:
     outputs:
       environment: ${{ steps.set_env.outputs.environment }}
       should_deploy: ${{ steps.set_env.outputs.should_deploy }}
+      tag_pattern: ${{ steps.set_env.outputs.tag_pattern }}
     
     steps:
       - name: Determine environment from branch
@@ -89,8 +94,15 @@ jobs:
           # Si es workflow_dispatch, usar el input
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             ENVIRONMENT="${{ github.event.inputs.environment }}"
+            TAG_PATTERN="${{ github.event.inputs.tag_pattern }}"
             SHOULD_DEPLOY="true"
             echo "📝 Modo: Manual (workflow_dispatch)"
+          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+            # En schedule, actualizar todos los entornos (puedes cambiar esto)
+            ENVIRONMENT="pro"
+            TAG_PATTERN=""
+            SHOULD_DEPLOY="true"
+            echo "⏰ Modo: Scheduled (cron)"
           else
             # Determinar entorno según la rama
             BRANCH_NAME="${{ github.ref_name }}"
@@ -111,73 +123,55 @@ jobs:
                 ;;
               *)
                 ENVIRONMENT="dev"
-                SHOULD_DEPLOY="false"  # No deployar en ramas feature
+                SHOULD_DEPLOY="false"
+                echo "ℹ️  Ramas feature no actualizan K8s automáticamente"
                 ;;
             esac
+            TAG_PATTERN=""
+          fi
+          
+          # Si no hay tag_pattern definido, usar el entorno como prefijo
+          if [[ -z "${TAG_PATTERN}" ]]; then
+            TAG_PATTERN="${ENVIRONMENT}-"
           fi
           
           echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
           echo "should_deploy=${SHOULD_DEPLOY}" >> $GITHUB_OUTPUT
+          echo "tag_pattern=${TAG_PATTERN}" >> $GITHUB_OUTPUT
           
           echo ""
           echo "✅ Entorno determinado: ${ENVIRONMENT}"
+          echo "🔎 Patrón de búsqueda: ${TAG_PATTERN}*"
           echo "🚀 Debe deployar: ${SHOULD_DEPLOY}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   # ═══════════════════════════════════════════════════════════
-  # 🐳 JOB 2: BUILD & PUSH DOCKER IMAGE
+  # 🔍 JOB 2: BUSCAR ÚLTIMA IMAGEN Y ACTUALIZAR K8S
   # ═══════════════════════════════════════════════════════════
-  build-and-push:
-    name: Build & Push Docker Image
+  find-and-update:
+    name: Find Latest Image & Update K8s
     needs: determine-environment
-    if: |
-      needs.determine-environment.outputs.should_deploy == 'true' &&
-      github.event.inputs.skip_build != 'true'
-    uses: ./.github/workflows/reusable-build-push-docker.yml
+    if: needs.determine-environment.outputs.should_deploy == 'true'
+    uses: ./.github/workflows/reusable-find-update-k8s.yml
     with:
-      docker_image: ${{ env.DOCKER_IMAGE_NAME }}
-      dockerhub_username: ${{ env.DOCKERHUB_USERNAME }}
+      docker_image: ${{ vars.DOCKER_IMAGE_NAME || 'mi-aplicacion' }}
+      dockerhub_username: ${{ vars.DOCKERHUB_USERNAME || 'tu-usuario' }}
       environment: ${{ needs.determine-environment.outputs.environment }}
-      dockerfile_path: ${{ env.DOCKERFILE_PATH }}
-      build_context: ${{ env.BUILD_CONTEXT }}
-      # Ejemplo de repositorio externo (descomentar si necesitas)
-      # external_repo: 'dariasmoises979-blip/app'
-      # external_repo_ref: 'main'
-      # external_repo_path: './external'
+      k8s_manifests_path: ${{ vars.K8S_MANIFESTS_PATH || 'kubernetes/entornos' }}
+      git_user_name: ${{ vars.GIT_USER_NAME || 'GitHub Actions Bot' }}
+      git_user_email: ${{ vars.GIT_USER_EMAIL || 'github-actions[bot]@users.noreply.github.com' }}
+      create_pr: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
+      tag_pattern: ${{ needs.determine-environment.outputs.tag_pattern }}
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      # EXTERNAL_REPO_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
-
-  # ═══════════════════════════════════════════════════════════
-  # 🔄 JOB 3: UPDATE KUBERNETES MANIFESTS
-  # ═══════════════════════════════════════════════════════════
-  update-kubernetes:
-    name: Update Kubernetes Manifests
-    needs: [determine-environment, build-and-push]
-    # Si skip_build es true, no esperar al build (pero sí al determine-environment)
-    if: |
-      always() &&
-      needs.determine-environment.outputs.should_deploy == 'true' &&
-      (needs.build-and-push.result == 'success' || github.event.inputs.skip_build == 'true')
-    uses: ./.github/workflows/reusable-update-k8s-images.yml
-    with:
-      docker_image: ${{ env.DOCKER_IMAGE_NAME }}
-      dockerhub_username: ${{ env.DOCKERHUB_USERNAME }}
-      environment: ${{ needs.determine-environment.outputs.environment }}
-      commit_sha: ${{ github.sha }}
-      k8s_manifests_path: ${{ env.K8S_MANIFESTS_PATH }}
-      git_user_name: ${{ env.GIT_USER_NAME }}
-      git_user_email: ${{ env.GIT_USER_EMAIL }}
-      create_pr: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
-    secrets:
       GH_PAT: ${{ secrets.GH_PAT }}
 
   # ═══════════════════════════════════════════════════════════
-  # 📊 JOB 4: DEPLOYMENT SUMMARY
+  # 📊 JOB 3: DEPLOYMENT SUMMARY
   # ═══════════════════════════════════════════════════════════
   deployment-summary:
     name: Deployment Summary
-    needs: [determine-environment, build-and-push, update-kubernetes]
+    needs: [determine-environment, find-and-update]
     if: always()
     runs-on: ubuntu-latest
     
@@ -185,53 +179,72 @@ jobs:
       - name: Generate deployment summary
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📊 RESUMEN DEL DEPLOYMENT"
+          echo "📊 RESUMEN DE ACTUALIZACIÓN K8S"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           echo "🎯 Información General:"
           echo "   • Entorno: ${{ needs.determine-environment.outputs.environment }}"
           echo "   • Rama: ${{ github.ref_name }}"
-          echo "   • Commit: ${{ github.sha }}"
           echo "   • Actor: ${{ github.actor }}"
           echo "   • Evento: ${{ github.event_name }}"
-          echo ""
-          echo "🐳 Build de Imagen:"
-          if [[ "${{ github.event.inputs.skip_build }}" == "true" ]]; then
-            echo "   ⏭️  Saltado (skip_build=true)"
-          else
-            echo "   • Estado: ${{ needs.build-and-push.result }}"
-            if [[ "${{ needs.build-and-push.result }}" == "success" ]]; then
-              echo "   • Imagen: ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ needs.determine-environment.outputs.environment }}-${GITHUB_SHA:0:7}"
-              echo "   • Docker Hub: https://hub.docker.com/r/${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}"
-            fi
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "   • Tipo: Ejecución programada (cron)"
           fi
           echo ""
+          echo "🔍 Búsqueda de Imagen:"
+          echo "   • Patrón: ${{ needs.determine-environment.outputs.tag_pattern }}*"
+          echo "   • Repositorio: ${{ vars.DOCKERHUB_USERNAME || 'tu-usuario' }}/${{ vars.DOCKER_IMAGE_NAME || 'mi-aplicacion' }}"
+          echo "   • Docker Hub: https://hub.docker.com/r/${{ vars.DOCKERHUB_USERNAME || 'tu-usuario' }}/${{ vars.DOCKER_IMAGE_NAME || 'mi-aplicacion' }}/tags"
+          echo ""
           echo "🔄 Actualización de K8s:"
-          echo "   • Estado: ${{ needs.update-kubernetes.result }}"
-          echo "   • Ruta: ${{ env.K8S_MANIFESTS_PATH }}"
+          echo "   • Estado: ${{ needs.find-and-update.result }}"
+          echo "   • Ruta: ${{ vars.K8S_MANIFESTS_PATH || 'kubernetes/entornos' }}"
           echo "   • Modo: ${{ github.event.inputs.create_pr == 'true' && 'Pull Request' || 'Commit Directo' }}"
           echo ""
           echo "✅ Estado General:"
-          if [[ "${{ needs.build-and-push.result }}" == "success" || "${{ github.event.inputs.skip_build }}" == "true" ]] && \
-             [[ "${{ needs.update-kubernetes.result }}" == "success" ]]; then
-            echo "   🎉 DEPLOYMENT COMPLETADO EXITOSAMENTE"
+          if [[ "${{ needs.find-and-update.result }}" == "success" ]]; then
+            echo "   🎉 ACTUALIZACIÓN COMPLETADA EXITOSAMENTE"
+          elif [[ "${{ needs.find-and-update.result }}" == "skipped" ]]; then
+            echo "   ⏭️  ACTUALIZACIÓN OMITIDA"
           else
-            echo "   ⚠️  DEPLOYMENT CON PROBLEMAS - Revisar logs"
+            echo "   ⚠️  ACTUALIZACIÓN CON PROBLEMAS - Revisar logs"
           fi
           echo ""
           echo "🔗 Enlaces:"
           echo "   • Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "   • Repositorio: ${{ github.server_url }}/${{ github.repository }}"
-          echo "   • Commit: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+          if [[ "${{ github.event_name }}" != "schedule" ]]; then
+            echo "   • Commit: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+          fi
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       # Notificación de error si algo falló
       - name: Report failure
-        if: |
-          needs.build-and-push.result == 'failure' || 
-          needs.update-kubernetes.result == 'failure'
+        if: needs.find-and-update.result == 'failure'
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "❌ DEPLOYMENT FALLIDO"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          echo "❌ ACTUALIZACIÓN FALLIDA"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "⚠️  Posibles causas:"
+          echo "   • No se encontraron imágenes en Docker Hub con el patrón especificado"
+          echo "   • Credenciales de Docker Hub incorrectas o token expirado"
+          echo "   • Permisos insuficientes para actualizar manifiestos"
+          echo "   • Manifiestos K8s con formato incorrecto"
+          echo "   • Token GH_PAT sin permisos adecuados (repo, workflow)"
+          echo "   • Directorio de manifiestos no existe"
+          echo ""
+          echo "🔍 Pasos de debug:"
+          echo "   1. Verificar que existen imágenes en Docker Hub:"
+          echo "      https://hub.docker.com/r/${{ vars.DOCKERHUB_USERNAME || 'tu-usuario' }}/${{ vars.DOCKER_IMAGE_NAME || 'mi-aplicacion' }}/tags"
+          echo "   2. Verificar patrón de búsqueda: '${{ needs.determine-environment.outputs.tag_pattern }}*'"
+          echo "   3. Revisar logs del job 'find-and-update'"
+          echo "   4. Verificar secrets: DOCKERHUB_TOKEN y GH_PAT"
+          echo "   5. Verificar que el directorio '${{ vars.K8S_MANIFESTS_PATH || 'kubernetes/entornos' }}' existe"
+          echo "   6. Verificar formato de manifiestos (image: usuario/app:tag)"
+          echo ""
+          echo "🔗 Ver workflow completo:"
+          echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          exit 1
