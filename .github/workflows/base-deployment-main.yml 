@@ -17,7 +17,7 @@ on:
   push:
     branches:
       - main
-      - 'integration'  # <-- agregar para detectar pushes desde integration
+      - integration
     paths:
       - 'src/**'
       - 'kubernetes/**'
@@ -26,6 +26,7 @@ on:
   pull_request:
     branches:
       - main
+      - integration
     # Esto permite PRs desde integration a main
     # Puedes agregar otras ramas si quieres
     paths:
