@@ -1,149 +1,21 @@
-name: Base Deployment Pipeline
+name: Desplegar aplicación a GKE
 
 on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy'
+        description: 'Selecciona el entorno de despliegue'
         required: true
         type: choice
         options:
-          - dev
+          - development
           - staging
-          - pre
-          - prod
-      image_tag:
-        description: 'Docker image tag (ej: dev-a1b2c3d, staging-f4e5d6c). Déjalo vacío para usar el último disponible'
-        required: false
-        type: string
-      dockerhub_username:
-        description: 'Usuario de Docker Hub'
-        required: true
-        type: string
-        default: 'tu-usuario'
-      docker_image:
-        description: 'Nombre de la imagen Docker'
-        required: true
-        type: string
-        default: 'mi-app'
-
-  # Trigger automático cuando el workflow de build termina exitosamente
-  workflow_run:
-    workflows: ["Reusable Build & Push Docker"]
-    types:
-      - completed
-    branches:
-      - main
-      - develop
+          - production
 
 jobs:
-  # Job para obtener el último tag de la imagen
-  get-latest-image:
-    runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.get_tag.outputs.tag }}
-      environment: ${{ steps.get_env.outputs.env }}
-    steps:
-      - name: Determine environment from branch
-        id: get_env
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            BRANCH="${{ github.event.workflow_run.head_branch }}"
-            if [[ "${BRANCH}" == "main" ]]; then
-              echo "env=staging" >> $GITHUB_OUTPUT
-            elif [[ "${BRANCH}" == "develop" ]]; then
-              echo "env=dev" >> $GITHUB_OUTPUT
-            else
-              echo "env=dev" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get image tag
-        id: get_tag
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.image_tag }}" ]]; then
-            # Tag especificado manualmente
-            echo "tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
-          else
-            # Obtener el SHA del commit que disparó el build
-            if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-              COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
-            else
-              COMMIT_SHA="${{ github.sha }}"
-            fi
-            SHORT_SHA="${COMMIT_SHA:0:7}"
-            
-            # Construir el tag usando el formato del workflow de build
-            ENVIRONMENT=$(echo "${{ steps.get_env.outputs.env }}" | xargs)
-            IMAGE_TAG="${ENVIRONMENT}-${SHORT_SHA}"
-            
-            echo "tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-            
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "🏷️  IMAGEN DETECTADA"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "🌍 Environment: ${ENVIRONMENT}"
-            echo "🔗 Commit SHA: ${COMMIT_SHA}"
-            echo "📦 Image Tag: ${IMAGE_TAG}"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          fi
-
-  # Despliegue automático para dev (cuando se hace push a develop)
-  deploy-dev:
-    if: |
-      (github.event_name == 'workflow_run' && 
-       github.event.workflow_run.head_branch == 'develop' && 
-       github.event.workflow_run.conclusion == 'success') ||
-      (github.event_name == 'workflow_dispatch' && inputs.environment == 'dev')
-    needs: get-latest-image
-    uses: ./.github/workflows/deployment-main.yml
+  deploy:
+    name: Llamar al workflow reusable de despliegue
+    uses: ./.github/workflows/deploy-reusable.yml
     with:
-      environment: dev
-      image_tag: ${{ needs.get-latest-image.outputs.image_tag }}
-      dockerhub_username: ${{ inputs.dockerhub_username || 'tu-usuario' }}
-      docker_image: ${{ inputs.docker_image || 'mi-app' }}
-    secrets: inherit
-
-  # Despliegue automático para staging (cuando se hace push a main)
-  deploy-staging:
-    if: |
-      (github.event_name == 'workflow_run' && 
-       github.event.workflow_run.head_branch == 'main' && 
-       github.event.workflow_run.conclusion == 'success') ||
-      (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
-    needs: get-latest-image
-    uses: ./.github/workflows/deployment-main.yml
-    with:
-      environment: staging
-      image_tag: ${{ needs.get-latest-image.outputs.image_tag }}
-      dockerhub_username: ${{ inputs.dockerhub_username || 'tu-usuario' }}
-      docker_image: ${{ inputs.docker_image || 'mi-app' }}
-    secrets: inherit
-
-  # Despliegue manual para pre
-  deploy-pre:
-    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'pre'
-    needs: get-latest-image
-    uses: ./.github/workflows/deployment-main.yml
-    with:
-      environment: pre
-      image_tag: ${{ needs.get-latest-image.outputs.image_tag }}
-      dockerhub_username: ${{ inputs.dockerhub_username }}
-      docker_image: ${{ inputs.docker_image }}
-      requires_approval: true
-    secrets: inherit
-
-  # Despliegue manual para prod
-  deploy-prod:
-    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'prod'
-    needs: get-latest-image
-    uses: ./.github/workflows/deployment-main.yml
-    with:
-      environment: prod
-      image_tag: ${{ needs.get-latest-image.outputs.image_tag }}
-      dockerhub_username: ${{ inputs.dockerhub_username }}
-      docker_image: ${{ inputs.docker_image }}
-      requires_approval: true
+      environment: ${{ github.event.inputs.environment }}
     secrets: inherit
