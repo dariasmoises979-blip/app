@@ -1,0 +1,138 @@
+name: Run Qa Tests
+
+on:
+  push:
+    branches:
+      - integration
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+  security-events: write
+
+jobs:
+  # ───────────────────────────────────────────────────────────
+  # Job 1: Llamar al workflow reusable de tests
+  # ───────────────────────────────────────────────────────────
+  test:
+    name: Run Qa Tests
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/integration.yml@main
+
+  # ──────────────────────────────────────────────────────────
+  # Job 2: Crear Docker Image and Push to Docker Hub
+  # ──────────────────────────────────────────────────────────
+  build-image:
+    name: Build Docker Image
+    needs: test
+    strategy:
+      matrix:
+        environment: [pre, staging, pro]
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: ${{ matrix.environment }}
+      
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app  
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas del build
+      dockerfile_path: local/Dockerfile
+      build_context: ./app-repo
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+
+  # ──────────────────────────────────────────────────────────
+  # Job 3: Security Scan
+  # ──────────────────────────────────────────────────────────
+  security:
+    name: Security Scan
+    needs: build-image
+    strategy:
+      matrix:
+        environment: [pre, staging, pro]
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/security.yml@main
+    with:
+      image_name: "dariasmoises979/mi-aplicacion"
+      image_tag: ${{ matrix.environment }}
+      dockerhub_username: dariasmoises979
+      enable_sonar: true
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────
+  # Job 4: Build Híbrido (con seguridad integrada)
+  # ──────────────────────────────────────────────────────────
+  pruebas-hybrid:
+    name: Build Híbrido - ${{ matrix.environment }}
+    needs: test
+    strategy:
+      matrix:
+        environment: [pre, staging, pro]
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-hybrid.yml@main
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: ${{ matrix.environment }}
+      
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas del build
+      dockerfile_path: local/Dockerfile
+      build_context: ./app-repo
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+
+  # ──────────────────────────────────────────────────────────
+  # Job 5: Main Pipeline (si quieres usarlo)
+  # ──────────────────────────────────────────────────────────
+  main-pipeline:
+      name: Pipeline Completo - ${{ matrix.environment }}
+      needs: test
+      strategy:
+        matrix:
+          environment: [pre, staging, pro]
+      uses: dariasmoises979-blip/pipeline-build/.github/workflows/main-pipeline.yml@main
+      with:
+        docker_image: mi-aplicacion
+        dockerhub_username: dariasmoises979
+        environment: ${{ matrix.environment }}
+        
+        # Configuración del repo externo
+        external_repo: dariasmoises979-blip/app
+        external_repo_ref: main
+        external_repo_path: ./app-repo
+        
+        # Rutas del build
+        dockerfile_path: ./app-repo/local/Dockerfile
+        build_context: ./app-repo
+        
+        # Opciones
+        enable_security_scan: true
+        enable_sonar: true
+      
+        # Configuración de SonarCloud
+        sonar_project_base_dir: "./pipeline-build"
+        sonar_args: >
+          -Dsonar.organization=dariasmoises979-blip
+          -Dsonar.projectKey=dariasmoises979-blip_app
+          -Dsonar.projectName=app
+          -Dsonar.python.version=3.10
+          -Dsonar.sources=system_info_app
+          -Dsonar.tests=system_info_app/test
+          -Dsonar.test.inclusions=**/test/**,**/tests/**
+          -Dsonar.coverage.exclusions=**/test/**,**/tests/**
+      
+      secrets:
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
