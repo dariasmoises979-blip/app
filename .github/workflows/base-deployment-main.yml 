@@ -6,15 +6,19 @@
 ########################################
 
 name: Update K8s from Docker Hub
-
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+  security-events: write
+  
 # 🎯 Triggers del workflow
 on:
   # Push a ramas específicas
   push:
     branches:
       - main
-      - develop
-      - 'release/**'
+
     paths:
       # Solo ejecutar si hay cambios en código o manifiestos
       - 'src/**'
@@ -25,7 +29,6 @@ on:
   pull_request:
     branches:
       - main
-      - develop
     paths:
       - 'src/**'
       - 'kubernetes/**'
@@ -55,8 +58,8 @@ on:
         default: ''
   
   # Ejecución programada (cada hora para verificar nuevas imágenes)
-  schedule:
-    - cron: '0 * * * *'  # Cada hora en punto
+  #schedule:
+  #  - cron: '0 * * * *'  # Cada hora en punto
 
 # ⚙️ Variables de entorno globales
 env:
