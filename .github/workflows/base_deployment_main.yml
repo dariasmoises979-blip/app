@@ -152,30 +152,30 @@ jobs:
   # ═══════════════════════════════════════════════════════════
   # 🔍 JOB 2: BUSCAR ÚLTIMA IMAGEN Y ACTUALIZAR K8S
   # ═══════════════════════════════════════════════════════════
-  find-and-update:
-    name: Find Latest Image & Update K8s
-    needs: determine-environment
-    if: needs.determine-environment.outputs.should_deploy == 'true'
-    uses: ./.github/workflows/reusable-find-update-k8s.yml
-    with:
-      docker_image: ${{ vars.DOCKER_IMAGE_NAME || 'mi-aplicacion' }}
-      dockerhub_username: ${{ vars.DOCKERHUB_USERNAME || 'tu-usuario' }}
-      environment: ${{ needs.determine-environment.outputs.environment }}
-      k8s_manifests_path: ${{ vars.K8S_MANIFESTS_PATH || 'kubernetes/entornos' }}
-      git_user_name: ${{ vars.GIT_USER_NAME || 'GitHub Actions Bot' }}
-      git_user_email: ${{ vars.GIT_USER_EMAIL || 'github-actions[bot]@users.noreply.github.com' }}
-      create_pr: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
-      tag_pattern: ${{ needs.determine-environment.outputs.tag_pattern }}
-    secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      GH_PAT: ${{ secrets.GH_PAT }}
+  # find-and-update:
+  #   name: Find Latest Image & Update K8s
+  #   needs: determine-environment
+  #   if: needs.determine-environment.outputs.should_deploy == 'true'
+  #   uses: ./.github/workflows/reusable-find-update-k8s.yml
+  #   with:
+  #     docker_image: ${{ vars.DOCKER_IMAGE_NAME || 'mi-aplicacion' }}
+  #     dockerhub_username: ${{ vars.DOCKERHUB_USERNAME || 'tu-usuario' }}
+  #     environment: ${{ needs.determine-environment.outputs.environment }}
+  #     k8s_manifests_path: ${{ vars.K8S_MANIFESTS_PATH || 'kubernetes/entornos' }}
+  #     git_user_name: ${{ vars.GIT_USER_NAME || 'GitHub Actions Bot' }}
+  #     git_user_email: ${{ vars.GIT_USER_EMAIL || 'github-actions[bot]@users.noreply.github.com' }}
+  #     create_pr: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
+  #     tag_pattern: ${{ needs.determine-environment.outputs.tag_pattern }}
+  #   secrets:
+  #     DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  #     GH_PAT: ${{ secrets.GH_PAT }}
 
   # ═══════════════════════════════════════════════════════════
   # 📊 JOB 3: DEPLOYMENT SUMMARY
   # ═══════════════════════════════════════════════════════════
   deployment-summary:
     name: Deployment Summary
-    needs: [determine-environment, find-and-update]
+    needs: [determine-environment]
     if: always()
     runs-on: ubuntu-latest
     
