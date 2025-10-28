@@ -22,7 +22,7 @@ jobs:
     with:
       environment: "dev"                      # 🟢 Cambia según el entorno (dev, staging, pre, prod)
       image_tag: "latest"                     # 🏷️  Tag de la imagen Docker a desplegar
-      dockerhub_username: "mi-usuario"        # 👤 Usuario de Docker Hub
+      dockerhub_username: "dariasmoises979"        # 👤 Usuario de Docker Hub
       docker_image: "mi-imagen"               # 📦 Nombre de la imagen Docker
       manifests_path: "k8s"                   # 📂 Ruta a los manifiestos
       manifest_file_pattern: "*.yaml"         # 📄 Patrón de archivos
