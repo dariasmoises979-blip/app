@@ -175,7 +175,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════
   deployment-summary:
     name: Deployment Summary
-    needs: [determine-environment, find-and-update]
+    needs: [determine-environment]
     if: always()
     runs-on: ubuntu-latest
     
