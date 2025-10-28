@@ -1,254 +1,63 @@
-########################################
-# 🔄 WORKFLOW BASE: Find Latest Image & Update K8s
-# Busca la última imagen Docker en Docker Hub y
-# actualiza los manifiestos de Kubernetes automáticamente
-# (NO construye imágenes nuevas)
-########################################
-
-name: Update K8s from Docker Hub
 permissions:
   actions: read
   contents: write
   pull-requests: write
   security-events: write
-  
-# 🎯 Triggers del workflow
+
+name: 🚀 GitOps Deployment (Base Trigger)
 
 on:
   push:
     branches:
       - main
-    paths:
-      - 'src/**'
-      - 'kubernetes/**'
-      - '.github/workflows/**'
-  
-  pull_request:
-    branches:
-      - main
-      - integration
-    # Esto permite PRs desde integration a main
-    # Puedes agregar otras ramas si quieres
-    paths:
-      - 'src/**'
-      - 'kubernetes/**'
+  workflow_dispatch:  # ✅ Permite ejecución manual
 
-  
-  # Ejecución manual con parámetros
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Entorno de deployment'
-        required: true
-        type: choice
-        options:
-          - dev
-          - staging
-          - pre
-          - pro
-        default: 'dev'
-      create_pr:
-        description: 'Crear PR en lugar de commit directo'
-        required: false
-        type: boolean
-        default: false
-      tag_pattern:
-        description: 'Patrón de tag a buscar (ej: pro-*, staging-*). Deja vacío para usar entorno-*'
-        required: false
-        type: string
-        default: ''
-  
-  # Ejecución programada (cada hora para verificar nuevas imágenes)
-  #schedule:
-  #  - cron: '0 * * * *'  # Cada hora en punto
-
-# ⚙️ Variables de entorno globales
-env:
-  # 🐳 Configuración de Docker Hub
-  DOCKERHUB_USERNAME: tu-usuario-dockerhub  # ⚠️ CAMBIAR POR TU USUARIO
-  DOCKER_IMAGE_NAME: mi-aplicacion           # ⚠️ CAMBIAR POR TU IMAGEN
-  
-  # 📁 Configuración de rutas
-  K8S_MANIFESTS_PATH: kubernetes/entornos
-  
-  # 🔧 Configuración de Git
-  GIT_USER_NAME: GitHub Actions Bot
-  GIT_USER_EMAIL: github-actions[bot]@users.noreply.github.com
-
+# ───────────────────────────────────────────────────────────
+# Job 1: Ejecutar Deployment GitOps
+# ───────────────────────────────────────────────────────────
 jobs:
-  # ═══════════════════════════════════════════════════════════
-  # 🎯 JOB 1: DETERMINAR ENTORNO
-  # ═══════════════════════════════════════════════════════════
-  determine-environment:
-    name: Determine Deployment Environment
+  gitops-deploy:
+    name: 🚀 Run Reusable GitOps Deployment
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-main.yml@main
+    with:
+      environment: "dev"                      # 🟢 Cambia según el entorno (dev, staging, pre, prod)
+      image_tag: "latest"                     # 🏷️  Tag de la imagen Docker a desplegar
+      dockerhub_username: "mi-usuario"        # 👤 Usuario de Docker Hub
+      docker_image: "mi-imagen"               # 📦 Nombre de la imagen Docker
+      manifests_path: "k8s"                   # 📂 Ruta a los manifiestos
+      manifest_file_pattern: "*.yaml"         # 📄 Patrón de archivos
+      git_user_name: "github-actions[bot]"    # 👤 Usuario Git
+      git_user_email: "github-actions[bot]@users.noreply.github.com"
+      commit_message_prefix: "[GitOps]"       # 📝 Prefijo del commit
+      requires_approval: false                # 🔐 Si requiere aprobación manual (pre/prod)
+    secrets: inherit
+
+# ───────────────────────────────────────────────────────────
+# Job 2: Crear Pull Request a integración (opcional)
+# ───────────────────────────────────────────────────────────
+  create-pr-to-integration:
+    name: 🔀 Create PR to Integration
+    needs: gitops-deploy
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
+    with:
+      source_branch: "main"
+      target_branch: "integration"
+      pr_title: "🚀 Deploy main to integration"
+      environment: "integration"
+      labels: "automated,deployment,gitops"
+    secrets: inherit
+
+# ───────────────────────────────────────────────────────────
+# Job 3: Mensaje final (opcional / manual)
+# ───────────────────────────────────────────────────────────
+  notify:
     runs-on: ubuntu-latest
-    outputs:
-      environment: ${{ steps.set_env.outputs.environment }}
-      should_deploy: ${{ steps.set_env.outputs.should_deploy }}
-      tag_pattern: ${{ steps.set_env.outputs.tag_pattern }}
-    
+    needs: create-pr-to-integration
     steps:
-      - name: Determine environment from branch
-        id: set_env
+      - name: ✅ Deployment Done
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🎯 DETERMINANDO ENTORNO DE DEPLOYMENT"
+          echo "🎉 GitOps Deployment completed successfully!"
+          echo "🌍 Environment: dev"
+          echo "🏷️  Image: mi-usuario/mi-imagen:latest"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          # Si es workflow_dispatch, usar el input
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            ENVIRONMENT="${{ github.event.inputs.environment }}"
-            TAG_PATTERN="${{ github.event.inputs.tag_pattern }}"
-            SHOULD_DEPLOY="true"
-            echo "📝 Modo: Manual (workflow_dispatch)"
-          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
-            # En schedule, actualizar todos los entornos (puedes cambiar esto)
-            ENVIRONMENT="pro"
-            TAG_PATTERN=""
-            SHOULD_DEPLOY="true"
-            echo "⏰ Modo: Scheduled (cron)"
-          else
-            # Determinar entorno según la rama
-            BRANCH_NAME="${{ github.ref_name }}"
-            echo "🌿 Rama: ${BRANCH_NAME}"
-            
-            case "${BRANCH_NAME}" in
-              main|master)
-                ENVIRONMENT="pro"
-                SHOULD_DEPLOY="true"
-                ;;
-              release/*)
-                ENVIRONMENT="pre"
-                SHOULD_DEPLOY="true"
-                ;;
-              develop)
-                ENVIRONMENT="staging"
-                SHOULD_DEPLOY="true"
-                ;;
-              *)
-                ENVIRONMENT="dev"
-                SHOULD_DEPLOY="false"
-                echo "ℹ️  Ramas feature no actualizan K8s automáticamente"
-                ;;
-            esac
-            TAG_PATTERN=""
-          fi
-          
-          # Si no hay tag_pattern definido, usar el entorno como prefijo
-          if [[ -z "${TAG_PATTERN}" ]]; then
-            TAG_PATTERN="${ENVIRONMENT}-"
-          fi
-          
-          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
-          echo "should_deploy=${SHOULD_DEPLOY}" >> $GITHUB_OUTPUT
-          echo "tag_pattern=${TAG_PATTERN}" >> $GITHUB_OUTPUT
-          
-          echo ""
-          echo "✅ Entorno determinado: ${ENVIRONMENT}"
-          echo "🔎 Patrón de búsqueda: ${TAG_PATTERN}*"
-          echo "🚀 Debe deployar: ${SHOULD_DEPLOY}"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-  # ═══════════════════════════════════════════════════════════
-  # 🔍 JOB 2: BUSCAR ÚLTIMA IMAGEN Y ACTUALIZAR K8S
-  # ═══════════════════════════════════════════════════════════
-  # find-and-update:
-  #   name: Find Latest Image & Update K8s
-  #   needs: determine-environment
-  #   if: needs.determine-environment.outputs.should_deploy == 'true'
-  #   uses: ./.github/workflows/reusable-find-update-k8s.yml
-  #   with:
-  #     docker_image: ${{ vars.DOCKER_IMAGE_NAME || 'mi-aplicacion' }}
-  #     dockerhub_username: ${{ vars.DOCKERHUB_USERNAME || 'tu-usuario' }}
-  #     environment: ${{ needs.determine-environment.outputs.environment }}
-  #     k8s_manifests_path: ${{ vars.K8S_MANIFESTS_PATH || 'kubernetes/entornos' }}
-  #     git_user_name: ${{ vars.GIT_USER_NAME || 'GitHub Actions Bot' }}
-  #     git_user_email: ${{ vars.GIT_USER_EMAIL || 'github-actions[bot]@users.noreply.github.com' }}
-  #     create_pr: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
-  #     tag_pattern: ${{ needs.determine-environment.outputs.tag_pattern }}
-  #   secrets:
-  #     DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-  #     GH_PAT: ${{ secrets.GH_PAT }}
-
-  # ═══════════════════════════════════════════════════════════
-  # 📊 JOB 3: DEPLOYMENT SUMMARY
-  # ═══════════════════════════════════════════════════════════
-  deployment-summary:
-    name: Deployment Summary
-    needs: [determine-environment]
-    if: always()
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Generate deployment summary
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📊 RESUMEN DE ACTUALIZACIÓN K8S"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "🎯 Información General:"
-          echo "   • Entorno: ${{ needs.determine-environment.outputs.environment }}"
-          echo "   • Rama: ${{ github.ref_name }}"
-          echo "   • Actor: ${{ github.actor }}"
-          echo "   • Evento: ${{ github.event_name }}"
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            echo "   • Tipo: Ejecución programada (cron)"
-          fi
-          echo ""
-          echo "🔍 Búsqueda de Imagen:"
-          echo "   • Patrón: ${{ needs.determine-environment.outputs.tag_pattern }}*"
-          echo "   • Repositorio: ${{ vars.DOCKERHUB_USERNAME || 'tu-usuario' }}/${{ vars.DOCKER_IMAGE_NAME || 'mi-aplicacion' }}"
-          echo "   • Docker Hub: https://hub.docker.com/r/${{ vars.DOCKERHUB_USERNAME || 'tu-usuario' }}/${{ vars.DOCKER_IMAGE_NAME || 'mi-aplicacion' }}/tags"
-          echo ""
-          echo "🔄 Actualización de K8s:"
-          echo "   • Estado: ${{ needs.find-and-update.result }}"
-          echo "   • Ruta: ${{ vars.K8S_MANIFESTS_PATH || 'kubernetes/entornos' }}"
-          echo "   • Modo: ${{ github.event.inputs.create_pr == 'true' && 'Pull Request' || 'Commit Directo' }}"
-          echo ""
-          echo "✅ Estado General:"
-          if [[ "${{ needs.find-and-update.result }}" == "success" ]]; then
-            echo "   🎉 ACTUALIZACIÓN COMPLETADA EXITOSAMENTE"
-          elif [[ "${{ needs.find-and-update.result }}" == "skipped" ]]; then
-            echo "   ⏭️  ACTUALIZACIÓN OMITIDA"
-          else
-            echo "   ⚠️  ACTUALIZACIÓN CON PROBLEMAS - Revisar logs"
-          fi
-          echo ""
-          echo "🔗 Enlaces:"
-          echo "   • Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          echo "   • Repositorio: ${{ github.server_url }}/${{ github.repository }}"
-          if [[ "${{ github.event_name }}" != "schedule" ]]; then
-            echo "   • Commit: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
-          fi
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-      # Notificación de error si algo falló
-      - name: Report failure
-        if: needs.find-and-update.result == 'failure'
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "❌ ACTUALIZACIÓN FALLIDA"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "⚠️  Posibles causas:"
-          echo "   • No se encontraron imágenes en Docker Hub con el patrón especificado"
-          echo "   • Credenciales de Docker Hub incorrectas o token expirado"
-          echo "   • Permisos insuficientes para actualizar manifiestos"
-          echo "   • Manifiestos K8s con formato incorrecto"
-          echo "   • Token GH_PAT sin permisos adecuados (repo, workflow)"
-          echo "   • Directorio de manifiestos no existe"
-          echo ""
-          echo "🔍 Pasos de debug:"
-          echo "   1. Verificar que existen imágenes en Docker Hub:"
-          echo "      https://hub.docker.com/r/${{ vars.DOCKERHUB_USERNAME || 'tu-usuario' }}/${{ vars.DOCKER_IMAGE_NAME || 'mi-aplicacion' }}/tags"
-          echo "   2. Verificar patrón de búsqueda: '${{ needs.determine-environment.outputs.tag_pattern }}*'"
-          echo "   3. Revisar logs del job 'find-and-update'"
-          echo "   4. Verificar secrets: DOCKERHUB_TOKEN y GH_PAT"
-          echo "   5. Verificar que el directorio '${{ vars.K8S_MANIFESTS_PATH || 'kubernetes/entornos' }}' existe"
-          echo "   6. Verificar formato de manifiestos (image: usuario/app:tag)"
-          echo ""
-          echo "🔗 Ver workflow completo:"
-          echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          exit 1
