@@ -13,11 +13,11 @@ permissions:
   security-events: write
   
 # 🎯 Triggers del workflow
+
 on:
   push:
     branches:
       - main
-      - integration
     paths:
       - 'src/**'
       - 'kubernetes/**'
