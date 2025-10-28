@@ -18,7 +18,7 @@ on:
 jobs:
   gitops-deploy:
     name: 🚀 Run Reusable GitOps Deployment
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/gitops-reusable.yaml@main
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/04-base_deployment_main.yml@main
     with:
       environment: "dev"                      # 🟢 Cambia según el entorno (dev, staging, pre, prod)
       image_tag: "latest"                     # 🏷️  Tag de la imagen Docker a desplegar
