@@ -119,6 +119,7 @@ jobs:
     name: 🐳 Build Docker Image
     needs: determine-environment
     uses:  dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main 
+
     with:
       docker_image: "mi-aplicacion"  # 👈 Cambiar por tu nombre de imagen
       dockerhub_username: "tu-usuario"  # 👈 Cambiar por tu usuario de Docker Hub
