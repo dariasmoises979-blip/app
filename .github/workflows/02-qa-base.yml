@@ -70,18 +70,6 @@ jobs:
     steps:
       - name: Hola Mundo
         run: |
-          echo "¡Hola Mundo!"     
-
+          echo "¡Hola Mundo!"    
 
           
-    
-
-  # ───────────────────────────────────────────────────────────
-  # Job 4: Despliegue a GKS QA (comentado)
-  # ───────────────────────────────────────────────────────────
-  # deploy-gks-qa:
-  #   name: Deploy to GKS QA
-  #   needs: create-pr-to-integration
-  #   uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
-  #   with:
-  #     deploy_to_gks: true

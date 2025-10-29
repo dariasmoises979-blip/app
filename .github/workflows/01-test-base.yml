@@ -19,7 +19,7 @@ jobs:
     secrets:
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
   # ───────────────────────────────────────────────────────────
-  # Job 2: Llamar al workflow reusable de merge
+  # Job 2: Llamar al workflow reusable de merge DEV
   # ───────────────────────────────────────────────────────────
   merge-to-dev:
     name: Merge to Dev
