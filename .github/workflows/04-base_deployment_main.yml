@@ -115,27 +115,27 @@ jobs:
   # ═══════════════════════════════════════════════════════════
   # 🐳 JOB 2: BUILD & PUSH IMAGEN DOCKER
   # ═══════════════════════════════════════════════════════════
-  build-docker-image:
-    name: 🐳 Build Docker Image
-    needs: determine-environment
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main
-    with:
-        docker_image: mi-aplicacion
-        dockerhub_username: dariasmoises979
-        environment: qa
+  # build-docker-image:
+  #   name: 🐳 Build Docker Image
+  #   needs: determine-environment
+  #   uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main
+  #   with:
+  #       docker_image: mi-aplicacion
+  #       dockerhub_username: dariasmoises979
+  #       environment: qa
         
-        # Configuración del repo externo
-        external_repo: dariasmoises979-blip/app
-        external_repo_ref: main
-        external_repo_path: ./app-repo
+  #       # Configuración del repo externo
+  #       external_repo: dariasmoises979-blip/app
+  #       external_repo_ref: main
+  #       external_repo_path: ./app-repo
         
-        # Rutas del build
-        dockerfile_path: ./app-repo/local/Dockerfile
-        build_context: ./app-repo                    # ✅ Sin barra final (correcto)
+  #       # Rutas del build
+  #       dockerfile_path: ./app-repo/local/Dockerfile
+  #       build_context: ./app-repo                    # ✅ Sin barra final (correcto)
         
-    secrets:
-        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+  #   secrets:
+  #       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  #       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
   
 
   # ═══════════════════════════════════════════════════════════
@@ -143,7 +143,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════
   show-build-output:
     name: 📊 Show Build Output
-    needs: build-docker-image
+    needs: determine-environment
     runs-on: ubuntu-latest
     steps:
       - name: Display Build Output
@@ -167,7 +167,6 @@ jobs:
     name: 🚀 Deploy to ${{ needs.determine-environment.outputs.environment }}
     needs: 
       - determine-environment
-      - build-docker-image
     if: |
       needs.determine-environment.outputs.should_deploy == 'true' && 
       (needs.determine-environment.outputs.environment == 'dev' || 
@@ -191,7 +190,6 @@ jobs:
     name: 🔐 Deploy to ${{ needs.determine-environment.outputs.environment }} (Requires Approval)
     needs: 
       - determine-environment
-      - build-docker-image
     if: |
       needs.determine-environment.outputs.should_deploy == 'true' && 
       (needs.determine-environment.outputs.environment == 'pre' || 
@@ -218,7 +216,6 @@ jobs:
     name: 📊 Pipeline Summary
     needs:
       - determine-environment
-      - build-docker-image
       - show-build-output
       - deploy-auto
       - deploy-manual
