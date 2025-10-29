@@ -439,7 +439,7 @@ jobs:
   # ───────────────────────────────────────────────────────────
   create-pr-to-integration:
     name: Create PR to Integration
-    needs: [build-image-pre, build-image-staging, build-image-pro]
+    needs: summary
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
     with:
       source_branch: 'integration'
