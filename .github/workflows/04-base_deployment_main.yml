@@ -118,7 +118,8 @@ jobs:
   build-docker-image:
     name: 🐳 Build Docker Image
     needs: determine-environment
-    uses: ./.github/workflows/docker-build-push.yml
+    uses:  dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main 
+
     with:
       docker_image: "mi-aplicacion"  # 👈 Cambiar por tu nombre de imagen
       dockerhub_username: "tu-usuario"  # 👈 Cambiar por tu usuario de Docker Hub
@@ -174,7 +175,7 @@ jobs:
       needs.determine-environment.outputs.should_deploy == 'true' && 
       (needs.determine-environment.outputs.environment == 'dev' || 
        needs.determine-environment.outputs.environment == 'staging')
-    uses: ./.github/workflows/deployment-gitops.yml
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       environment: ${{ needs.determine-environment.outputs.environment }}
       image_tag: ${{ needs.build-docker-image.outputs.image_tag }}  # 🎯 Usar el output del build
@@ -197,7 +198,7 @@ jobs:
       needs.determine-environment.outputs.should_deploy == 'true' && 
       (needs.determine-environment.outputs.environment == 'pre' || 
        needs.determine-environment.outputs.environment == 'prod')
-    uses: ./.github/workflows/deployment-gitops.yml
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       environment: ${{ needs.determine-environment.outputs.environment }}
       image_tag: ${{ needs.build-docker-image.outputs.image_tag }}  # 🎯 Usar el output del build
