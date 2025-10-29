@@ -1,23 +1,23 @@
 ########################################
 # 🚀 CI/CD PIPELINE COMPLETO
 # Build de imagen Docker + GitOps deployment con ArgoCD
-# Usa outputs del workflow de build para deployment
+# 🆕 USA EL TAG GENERADO POR EL BUILD
 ########################################
 
 name: CI/CD Pipeline
 
-permissions:
-  contents: write
 on:
   push:
     branches:
       - main
+      - develop
+      - 'release/**'
   pull_request:
     branches:
       - main
+      - develop
 
-
-    # Permitir ejecución manual con selección de entorno
+  # Permitir ejecución manual con selección de entorno
   workflow_dispatch:
     inputs:
       environment:
@@ -118,7 +118,7 @@ jobs:
   build-docker-image:
     name: 🐳 Build Docker Image
     needs: determine-environment
-    uses:  dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main 
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main
     with:
       docker_image: "mi-aplicacion"  # 👈 Cambiar por tu nombre de imagen
       dockerhub_username: "tu-usuario"  # 👈 Cambiar por tu usuario de Docker Hub
@@ -134,32 +134,25 @@ jobs:
       # EXTERNAL_REPO_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
 
   # ═══════════════════════════════════════════════════════════
-  # 📊 JOB 3: MOSTRAR INFORMACIÓN DEL BUILD
+  # 📊 JOB 3: MOSTRAR TAG GENERADO
   # ═══════════════════════════════════════════════════════════
-  show-build-info:
-    name: 📊 Build Information
-    needs: 
-      - determine-environment
-      - build-docker-image
+  show-build-output:
+    name: 📊 Show Build Output
+    needs: build-docker-image
     runs-on: ubuntu-latest
     steps:
-      - name: Display Build Results
+      - name: Display Build Output
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📊 BUILD COMPLETED SUCCESSFULLY"
+          echo "📊 BUILD OUTPUT INFORMATION"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🌍 Environment: ${{ needs.determine-environment.outputs.environment }}"
-          echo "🎯 Primary Tag: ${{ needs.build-docker-image.outputs.image_tag }}"
+          echo "🏷️  Primary Tag: ${{ needs.build-docker-image.outputs.image_tag }}"
           echo "📦 Full Image: ${{ needs.build-docker-image.outputs.full_image }}"
-          echo "📝 Short SHA: ${{ needs.build-docker-image.outputs.short_sha }}"
+          echo "🔗 Short SHA: ${{ needs.build-docker-image.outputs.short_sha }}"
           echo "📋 All Tags: ${{ needs.build-docker-image.outputs.all_tags }}"
           echo ""
-          echo "🚀 Next Step:"
-          if [ "${{ needs.determine-environment.outputs.should_deploy }}" == "true" ]; then
-            echo "   ✅ Will proceed to deployment"
-          else
-            echo "   ⏸️  Deployment skipped (PR or feature branch)"
-          fi
+          echo "🎯 This tag will be used for deployment:"
+          echo "   ${{ needs.build-docker-image.outputs.image_tag }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   # ═══════════════════════════════════════════════════════════
@@ -177,7 +170,8 @@ jobs:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       environment: ${{ needs.determine-environment.outputs.environment }}
-      image_tag: ${{ needs.build-docker-image.outputs.image_tag }}  # 🎯 Usar el output del build
+      # 🎯 USAR EL TAG GENERADO POR EL BUILD
+      image_tag: ${{ needs.build-docker-image.outputs.image_tag }}
       dockerhub_username: "tu-usuario"  # 👈 Debe coincidir con el de build
       docker_image: "mi-aplicacion"      # 👈 Debe coincidir con el de build
       manifests_path: "k8s"              # 👈 Ruta a tus manifiestos
@@ -200,7 +194,8 @@ jobs:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       environment: ${{ needs.determine-environment.outputs.environment }}
-      image_tag: ${{ needs.build-docker-image.outputs.image_tag }}  # 🎯 Usar el output del build
+      # 🎯 USAR EL TAG GENERADO POR EL BUILD
+      image_tag: ${{ needs.build-docker-image.outputs.image_tag }}
       dockerhub_username: "tu-usuario"
       docker_image: "mi-aplicacion"
       manifests_path: "k8s"
@@ -217,7 +212,7 @@ jobs:
     needs:
       - determine-environment
       - build-docker-image
-      - show-build-info
+      - show-build-output
       - deploy-auto
       - deploy-manual
     if: always()
@@ -236,15 +231,15 @@ jobs:
           echo "👤 Triggered by: ${{ github.actor }}"
           echo "🕐 Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           echo ""
-          echo "🐳 Docker Image Built:"
-          echo "   • Tag: ${{ needs.build-docker-image.outputs.image_tag }}"
-          echo "   • Full: ${{ needs.build-docker-image.outputs.full_image }}"
-          echo "   • SHA: ${{ needs.build-docker-image.outputs.short_sha }}"
+          echo "🐳 Docker Build:"
+          echo "   • Status: ${{ needs.build-docker-image.result }}"
+          echo "   • Image Tag: ${{ needs.build-docker-image.outputs.image_tag }}"
+          echo "   • Full Image: ${{ needs.build-docker-image.outputs.full_image }}"
           echo ""
           echo "📋 Job Results:"
-          echo "   • Determine Environment: ${{ needs.determine-environment.result }}"
-          echo "   • Build Docker Image: ${{ needs.build-docker-image.result }}"
-          echo "   • Show Build Info: ${{ needs.show-build-info.result }}"
+          echo "   • Determine Env: ${{ needs.determine-environment.result }}"
+          echo "   • Build: ${{ needs.build-docker-image.result }}"
+          echo "   • Show Output: ${{ needs.show-build-output.result }}"
           echo "   • Deploy Auto: ${{ needs.deploy-auto.result || 'skipped' }}"
           echo "   • Deploy Manual: ${{ needs.deploy-manual.result || 'skipped' }}"
           echo ""
@@ -257,21 +252,18 @@ jobs:
             echo "   2. Monitor application health"
             echo "   3. Verify deployment in target environment"
             echo ""
-            echo "📦 Deployed Image:"
-            echo "   ${{ needs.build-docker-image.outputs.full_image }}"
+            echo "🎯 Deployed Image Tag:"
+            echo "   ${{ needs.build-docker-image.outputs.image_tag }}"
           else
             echo "ℹ️  Image built but not deployed (PR or feature branch)"
             echo ""
-            echo "📦 Built Image (not deployed):"
+            echo "🐳 Built Image:"
             echo "   ${{ needs.build-docker-image.outputs.full_image }}"
           fi
           
           echo ""
           echo "🔗 Workflow Run:"
           echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          echo ""
-          echo "🐳 Docker Hub:"
-          echo "   https://hub.docker.com/r/tu-usuario/mi-aplicacion/tags?name=${{ needs.build-docker-image.outputs.image_tag }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Check for Failures
@@ -294,7 +286,6 @@ jobs:
           echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           exit 1
-
 
 #           # .github/workflows/04-base_deployment_main.yml
 # name: Deploy Updated Images
