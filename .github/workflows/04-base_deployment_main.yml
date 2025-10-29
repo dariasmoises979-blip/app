@@ -1,63 +1,296 @@
-permissions:
-  actions: read
-  contents: write
-  pull-requests: write
-  security-events: write
+########################################
+# 🚀 CI/CD PIPELINE COMPLETO
+# Build de imagen Docker + GitOps deployment con ArgoCD
+# Usa outputs del workflow de build para deployment
+########################################
 
-name: 🚀 GitOps Deployment (Base Trigger)
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:  # ✅ Permite ejecución manual
+      - develop
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+      - develop
 
-# ───────────────────────────────────────────────────────────
-# Job 1: Ejecutar Deployment GitOps
-# ───────────────────────────────────────────────────────────
+  # Permitir ejecución manual con selección de entorno
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - pre
+          - prod
+      force_build:
+        description: 'Force rebuild even if no changes'
+        required: false
+        type: boolean
+        default: false
+
+# Prevenir ejecuciones concurrentes por rama
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  gitops-deploy:
-    name: 🚀 Run Reusable GitOps Deployment
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-main.yml@main
-    with:
-      environment: "dev"                      # 🟢 Cambia según el entorno (dev, staging, pre, prod)
-      image_tag: "latest"                     # 🏷️  Tag de la imagen Docker a desplegar
-      dockerhub_username: "dariasmoises979"        # 👤 Usuario de Docker Hub
-      docker_image: "mi-imagen"               # 📦 Nombre de la imagen Docker
-      manifests_path: "k8s"                   # 📂 Ruta a los manifiestos
-      manifest_file_pattern: "*.yaml"         # 📄 Patrón de archivos
-      git_user_name: "github-actions[bot]"    # 👤 Usuario Git
-      git_user_email: "github-actions[bot]@users.noreply.github.com"
-      commit_message_prefix: "[GitOps]"       # 📝 Prefijo del commit
-      requires_approval: false                # 🔐 Si requiere aprobación manual (pre/prod)
-    secrets: inherit
-
-# ───────────────────────────────────────────────────────────
-# Job 2: Crear Pull Request a integración (opcional)
-# ───────────────────────────────────────────────────────────
-  create-pr-to-integration:
-    name: 🔀 Create PR to Integration
-    needs: gitops-deploy
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
-    with:
-      source_branch: "main"
-      target_branch: "integration"
-      pr_title: "🚀 Deploy main to integration"
-      environment: "integration"
-      labels: "automated,deployment,gitops"
-    secrets: inherit
-
-# ───────────────────────────────────────────────────────────
-# Job 3: Mensaje final (opcional / manual)
-# ───────────────────────────────────────────────────────────
-  notify:
+  # ═══════════════════════════════════════════════════════════
+  # 🎯 JOB 1: DETERMINAR ENTORNO BASADO EN LA RAMA
+  # ═══════════════════════════════════════════════════════════
+  determine-environment:
+    name: 🎯 Determine Environment
     runs-on: ubuntu-latest
-    needs: create-pr-to-integration
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      should_deploy: ${{ steps.env.outputs.should_deploy }}
+      
     steps:
-      - name: ✅ Deployment Done
+      - name: Determine Environment from Branch
+        id: env
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🎉 GitOps Deployment completed successfully!"
-          echo "🌍 Environment: dev"
-          echo "🏷️  Image: mi-usuario/mi-imagen:latest"
+          echo "🎯 DETERMINING DEPLOYMENT ENVIRONMENT"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Si es workflow_dispatch, usar el input del usuario
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+            SHOULD_DEPLOY="true"
+            echo "🖱️  Manual trigger detected"
+            echo "🌍 Selected environment: ${ENVIRONMENT}"
+          
+          # Si es pull_request, solo build sin deploy
+          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            ENVIRONMENT="dev"
+            SHOULD_DEPLOY="false"
+            echo "🔀 Pull Request detected"
+            echo "🔨 Will build image but NOT deploy"
+          
+          # Determinar por rama
+          else
+            BRANCH="${{ github.ref_name }}"
+            echo "🌿 Branch: ${BRANCH}"
+            
+            case "${BRANCH}" in
+              main|master)
+                ENVIRONMENT="prod"
+                SHOULD_DEPLOY="true"
+                ;;
+              release/*)
+                ENVIRONMENT="pre"
+                SHOULD_DEPLOY="true"
+                ;;
+              staging)
+                ENVIRONMENT="staging"
+                SHOULD_DEPLOY="true"
+                ;;
+              develop|development)
+                ENVIRONMENT="dev"
+                SHOULD_DEPLOY="true"
+                ;;
+              *)
+                ENVIRONMENT="dev"
+                SHOULD_DEPLOY="false"
+                echo "⚠️  Feature branch detected - will build but not deploy"
+                ;;
+            esac
+          fi
+          
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "should_deploy=${SHOULD_DEPLOY}" >> $GITHUB_OUTPUT
+          
+          echo ""
+          echo "📋 Results:"
+          echo "   • Environment: ${ENVIRONMENT}"
+          echo "   • Should Deploy: ${SHOULD_DEPLOY}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # ═══════════════════════════════════════════════════════════
+  # 🐳 JOB 2: BUILD & PUSH IMAGEN DOCKER
+  # ═══════════════════════════════════════════════════════════
+  build-docker-image:
+    name: 🐳 Build Docker Image
+    needs: determine-environment
+    uses: ./.github/workflows/docker-build-push.yml
+    with:
+      docker_image: "mi-aplicacion"  # 👈 Cambiar por tu nombre de imagen
+      dockerhub_username: "tu-usuario"  # 👈 Cambiar por tu usuario de Docker Hub
+      environment: ${{ needs.determine-environment.outputs.environment }}
+      dockerfile_path: "./Dockerfile"
+      build_context: "."
+      # Opcional: si necesitas clonar un repo externo
+      # external_repo: "usuario/repo-externo"
+      # external_repo_ref: "main"
+      # external_repo_path: "./external"
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      # EXTERNAL_REPO_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════
+  # 📊 JOB 3: MOSTRAR INFORMACIÓN DEL BUILD
+  # ═══════════════════════════════════════════════════════════
+  show-build-info:
+    name: 📊 Build Information
+    needs: 
+      - determine-environment
+      - build-docker-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Display Build Results
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 BUILD COMPLETED SUCCESSFULLY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🌍 Environment: ${{ needs.determine-environment.outputs.environment }}"
+          echo "🎯 Primary Tag: ${{ needs.build-docker-image.outputs.image_tag }}"
+          echo "📦 Full Image: ${{ needs.build-docker-image.outputs.full_image }}"
+          echo "📝 Short SHA: ${{ needs.build-docker-image.outputs.short_sha }}"
+          echo "📋 All Tags: ${{ needs.build-docker-image.outputs.all_tags }}"
+          echo ""
+          echo "🚀 Next Step:"
+          if [ "${{ needs.determine-environment.outputs.should_deploy }}" == "true" ]; then
+            echo "   ✅ Will proceed to deployment"
+          else
+            echo "   ⏸️  Deployment skipped (PR or feature branch)"
+          fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # ═══════════════════════════════════════════════════════════
+  # 🚀 JOB 4: DESPLIEGUE GITOPS (DEV & STAGING - AUTOMÁTICO)
+  # ═══════════════════════════════════════════════════════════
+  deploy-auto:
+    name: 🚀 Deploy to ${{ needs.determine-environment.outputs.environment }}
+    needs: 
+      - determine-environment
+      - build-docker-image
+    if: |
+      needs.determine-environment.outputs.should_deploy == 'true' && 
+      (needs.determine-environment.outputs.environment == 'dev' || 
+       needs.determine-environment.outputs.environment == 'staging')
+    uses: ./.github/workflows/deployment-gitops.yml
+    with:
+      environment: ${{ needs.determine-environment.outputs.environment }}
+      image_tag: ${{ needs.build-docker-image.outputs.image_tag }}  # 🎯 Usar el output del build
+      dockerhub_username: "tu-usuario"  # 👈 Debe coincidir con el de build
+      docker_image: "mi-aplicacion"      # 👈 Debe coincidir con el de build
+      manifests_path: "k8s"              # 👈 Ruta a tus manifiestos
+      manifest_file_pattern: "*.yaml"
+      commit_message_prefix: "[GitOps]"
+    secrets: inherit
+
+  # ═══════════════════════════════════════════════════════════
+  # 🔐 JOB 5: DESPLIEGUE GITOPS (PRE & PROD - MANUAL)
+  # ═══════════════════════════════════════════════════════════
+  deploy-manual:
+    name: 🔐 Deploy to ${{ needs.determine-environment.outputs.environment }} (Requires Approval)
+    needs: 
+      - determine-environment
+      - build-docker-image
+    if: |
+      needs.determine-environment.outputs.should_deploy == 'true' && 
+      (needs.determine-environment.outputs.environment == 'pre' || 
+       needs.determine-environment.outputs.environment == 'prod')
+    uses: ./.github/workflows/deployment-gitops.yml
+    with:
+      environment: ${{ needs.determine-environment.outputs.environment }}
+      image_tag: ${{ needs.build-docker-image.outputs.image_tag }}  # 🎯 Usar el output del build
+      dockerhub_username: "tu-usuario"
+      docker_image: "mi-aplicacion"
+      manifests_path: "k8s"
+      manifest_file_pattern: "*.yaml"
+      commit_message_prefix: "[GitOps]"
+      requires_approval: true
+    secrets: inherit
+
+  # ═══════════════════════════════════════════════════════════
+  # 📊 JOB 6: RESUMEN FINAL
+  # ═══════════════════════════════════════════════════════════
+  summary:
+    name: 📊 Pipeline Summary
+    needs:
+      - determine-environment
+      - build-docker-image
+      - show-build-info
+      - deploy-auto
+      - deploy-manual
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Pipeline Summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 CI/CD PIPELINE SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔗 Event: ${{ github.event_name }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "🌍 Environment: ${{ needs.determine-environment.outputs.environment }}"
+          echo "🚀 Should Deploy: ${{ needs.determine-environment.outputs.should_deploy }}"
+          echo "👤 Triggered by: ${{ github.actor }}"
+          echo "🕐 Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "🐳 Docker Image Built:"
+          echo "   • Tag: ${{ needs.build-docker-image.outputs.image_tag }}"
+          echo "   • Full: ${{ needs.build-docker-image.outputs.full_image }}"
+          echo "   • SHA: ${{ needs.build-docker-image.outputs.short_sha }}"
+          echo ""
+          echo "📋 Job Results:"
+          echo "   • Determine Environment: ${{ needs.determine-environment.result }}"
+          echo "   • Build Docker Image: ${{ needs.build-docker-image.result }}"
+          echo "   • Show Build Info: ${{ needs.show-build-info.result }}"
+          echo "   • Deploy Auto: ${{ needs.deploy-auto.result || 'skipped' }}"
+          echo "   • Deploy Manual: ${{ needs.deploy-manual.result || 'skipped' }}"
+          echo ""
+          
+          if [ "${{ needs.determine-environment.outputs.should_deploy }}" == "true" ]; then
+            echo "✅ Deployment completed to: ${{ needs.determine-environment.outputs.environment }}"
+            echo ""
+            echo "🔄 Next Steps:"
+            echo "   1. Check ArgoCD for sync status"
+            echo "   2. Monitor application health"
+            echo "   3. Verify deployment in target environment"
+            echo ""
+            echo "📦 Deployed Image:"
+            echo "   ${{ needs.build-docker-image.outputs.full_image }}"
+          else
+            echo "ℹ️  Image built but not deployed (PR or feature branch)"
+            echo ""
+            echo "📦 Built Image (not deployed):"
+            echo "   ${{ needs.build-docker-image.outputs.full_image }}"
+          fi
+          
+          echo ""
+          echo "🔗 Workflow Run:"
+          echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo ""
+          echo "🐳 Docker Hub:"
+          echo "   https://hub.docker.com/r/tu-usuario/mi-aplicacion/tags?name=${{ needs.build-docker-image.outputs.image_tag }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Check for Failures
+        if: |
+          needs.build-docker-image.result == 'failure' ||
+          needs.deploy-auto.result == 'failure' ||
+          needs.deploy-manual.result == 'failure'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "❌ PIPELINE FAILED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "⚠️  One or more jobs failed. Please check the logs above."
+          echo ""
+          echo "🔍 Failed Jobs:"
+          [ "${{ needs.build-docker-image.result }}" == "failure" ] && echo "   • Build Docker Image"
+          [ "${{ needs.deploy-auto.result }}" == "failure" ] && echo "   • Deploy Auto"
+          [ "${{ needs.deploy-manual.result }}" == "failure" ] && echo "   • Deploy Manual"
+          echo ""
+          echo "🔗 Workflow Run:"
+          echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          exit 1
