@@ -12,27 +12,28 @@ permissions:
   security-events: write
 
 jobs:
-  # ───────────────────────────────────────────────────────────
-  # Job 1: Llamar al workflow reusable de tests
-  # ───────────────────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════
+  # JOB 1: TESTS DE INTEGRACIÓN
+  # ═══════════════════════════════════════════════════════════
   test:
-    name: Run Qa Tests
+    name: 🧪 Run Qa Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/integration.yml@main
 
+  # ═══════════════════════════════════════════════════════════
+  # JOB 2: BUILD DE IMÁGENES DOCKER - SEPARADO POR AMBIENTE
+  # ═══════════════════════════════════════════════════════════
+  
   # ──────────────────────────────────────────────────────────
-  # Job 2: Crear Docker Image and Push to Docker Hub
+  # Build - Ambiente PRE
   # ──────────────────────────────────────────────────────────
-  build-image:
-    name: Build Docker Image
+  build-image-pre:
+    name: 🏗️ Build Docker Image - PRE
     needs: test
-    strategy:
-      matrix:
-        environment: [pre, staging, pro]
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main
     with:
       docker_image: mi-aplicacion
       dockerhub_username: dariasmoises979
-      environment: ${{ matrix.environment }}
+      environment: pre
       
       # Configuración del repo externo
       external_repo: dariasmoises979-blip/app  
@@ -47,38 +48,120 @@ jobs:
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
 
   # ──────────────────────────────────────────────────────────
-  # Job 3: Security Scan
+  # Build - Ambiente STAGING
   # ──────────────────────────────────────────────────────────
-  security:
-    name: Security Scan
-    needs: build-image
-    strategy:
-      matrix:
-        environment: [pre, staging, pro]
+  build-image-staging:
+    name: 🏗️ Build Docker Image - STAGING
+    needs: test
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: staging
+      
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app  
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas del build
+      dockerfile_path: local/Dockerfile
+      build_context: ./app-repo
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+
+  # ──────────────────────────────────────────────────────────
+  # Build - Ambiente PRO
+  # ──────────────────────────────────────────────────────────
+  build-image-pro:
+    name: 🏗️ Build Docker Image - PRO
+    needs: test
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: pro
+      
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app  
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas del build
+      dockerfile_path: local/Dockerfile
+      build_context: ./app-repo
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 3: SECURITY SCAN - SEPARADO POR AMBIENTE
+  # ═══════════════════════════════════════════════════════════
+  
+  # ──────────────────────────────────────────────────────────
+  # Security Scan - Ambiente PRE
+  # ──────────────────────────────────────────────────────────
+  security-pre:
+    name: 🔐 Security Scan - PRE
+    needs: build-image-pre
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/security.yml@main
     with:
       image_name: "dariasmoises979/mi-aplicacion"
-      image_tag: ${{ matrix.environment }}
-      dockerhub_username: dariasmoises979
+      image_tag: "pre"
+      dockerhub_username: "dariasmoises979"
       enable_sonar: true
     secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # ──────────────────────────────────────────────────────────
-  # Job 4: Build Híbrido (con seguridad integrada)
+  # Security Scan - Ambiente STAGING
   # ──────────────────────────────────────────────────────────
-  pruebas-hybrid:
-    name: Build Híbrido - ${{ matrix.environment }}
+  security-staging:
+    name: 🔐 Security Scan - STAGING
+    needs: build-image-staging
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/security.yml@main
+    with:
+      image_name: "dariasmoises979/mi-aplicacion"
+      image_tag: "staging"
+      dockerhub_username: "dariasmoises979"
+      enable_sonar: true
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────
+  # Security Scan - Ambiente PRO
+  # ──────────────────────────────────────────────────────────
+  security-pro:
+    name: 🔐 Security Scan - PRO
+    needs: build-image-pro
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/security.yml@main
+    with:
+      image_name: "dariasmoises979/mi-aplicacion"
+      image_tag: "pro"
+      dockerhub_username: "dariasmoises979"
+      enable_sonar: true
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 4: BUILD HÍBRIDO - SEPARADO POR AMBIENTE
+  # ═══════════════════════════════════════════════════════════
+  
+  # ──────────────────────────────────────────────────────────
+  # Build Híbrido - Ambiente PRE
+  # ──────────────────────────────────────────────────────────
+  hybrid-pre:
+    name: 🔄 Build Híbrido - PRE
     needs: test
-    strategy:
-      matrix:
-        environment: [pre, staging, pro]
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-hybrid.yml@main
     with:
       docker_image: mi-aplicacion
       dockerhub_username: dariasmoises979
-      environment: ${{ matrix.environment }}
+      environment: pre
       
       # Configuración del repo externo
       external_repo: dariasmoises979-blip/app
@@ -93,46 +176,238 @@ jobs:
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
 
   # ──────────────────────────────────────────────────────────
-  # Job 5: Main Pipeline (si quieres usarlo)
+  # Build Híbrido - Ambiente STAGING
   # ──────────────────────────────────────────────────────────
-  main-pipeline:
-      name: Pipeline Completo - ${{ matrix.environment }}
-      needs: test
-      strategy:
-        matrix:
-          environment: [pre, staging, pro]
-      uses: dariasmoises979-blip/pipeline-build/.github/workflows/main-pipeline.yml@main
-      with:
-        docker_image: mi-aplicacion
-        dockerhub_username: dariasmoises979
-        environment: ${{ matrix.environment }}
-        
-        # Configuración del repo externo
-        external_repo: dariasmoises979-blip/app
-        external_repo_ref: main
-        external_repo_path: ./app-repo
-        
-        # Rutas del build
-        dockerfile_path: ./app-repo/local/Dockerfile
-        build_context: ./app-repo
-        
-        # Opciones
-        enable_security_scan: true
-        enable_sonar: true
+  hybrid-staging:
+    name: 🔄 Build Híbrido - STAGING
+    needs: test
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-hybrid.yml@main
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: staging
       
-        # Configuración de SonarCloud
-        sonar_project_base_dir: "./pipeline-build"
-        sonar_args: >
-          -Dsonar.organization=dariasmoises979-blip
-          -Dsonar.projectKey=dariasmoises979-blip_app
-          -Dsonar.projectName=app
-          -Dsonar.python.version=3.10
-          -Dsonar.sources=system_info_app
-          -Dsonar.tests=system_info_app/test
-          -Dsonar.test.inclusions=**/test/**,**/tests/**
-          -Dsonar.coverage.exclusions=**/test/**,**/tests/**
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: ./app-repo
       
-      secrets:
-        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # Rutas del build
+      dockerfile_path: local/Dockerfile
+      build_context: ./app-repo
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+
+  # ──────────────────────────────────────────────────────────
+  # Build Híbrido - Ambiente PRO
+  # ──────────────────────────────────────────────────────────
+  hybrid-pro:
+    name: 🔄 Build Híbrido - PRO
+    needs: test
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-hybrid.yml@main
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: pro
+      
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas del build
+      dockerfile_path: local/Dockerfile
+      build_context: ./app-repo
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 5: MAIN PIPELINE - SEPARADO POR AMBIENTE
+  # ═══════════════════════════════════════════════════════════
+  
+  # ──────────────────────────────────────────────────────────
+  # Main Pipeline - Ambiente PRE
+  # ──────────────────────────────────────────────────────────
+  main-pipeline-pre:
+    name: 🚀 Pipeline Completo - PRE
+    needs: test
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/main-pipeline.yml@main
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: pre
+      
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas del build
+      dockerfile_path: ./app-repo/local/Dockerfile
+      build_context: ./app-repo
+      
+      # Opciones
+      enable_security_scan: true
+      enable_sonar: true
+    
+      # Configuración de SonarCloud
+      sonar_project_base_dir: "./pipeline-build"
+      sonar_args: >
+        -Dsonar.organization=dariasmoises979-blip
+        -Dsonar.projectKey=dariasmoises979-blip_app
+        -Dsonar.projectName=app
+        -Dsonar.python.version=3.10
+        -Dsonar.sources=system_info_app
+        -Dsonar.tests=system_info_app/test
+        -Dsonar.test.inclusions=**/test/**,**/tests/**
+        -Dsonar.coverage.exclusions=**/test/**,**/tests/**
+    
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────
+  # Main Pipeline - Ambiente STAGING
+  # ──────────────────────────────────────────────────────────
+  main-pipeline-staging:
+    name: 🚀 Pipeline Completo - STAGING
+    needs: test
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/main-pipeline.yml@main
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: staging
+      
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas del build
+      dockerfile_path: ./app-repo/local/Dockerfile
+      build_context: ./app-repo
+      
+      # Opciones
+      enable_security_scan: true
+      enable_sonar: true
+    
+      # Configuración de SonarCloud
+      sonar_project_base_dir: "./pipeline-build"
+      sonar_args: >
+        -Dsonar.organization=dariasmoises979-blip
+        -Dsonar.projectKey=dariasmoises979-blip_app
+        -Dsonar.projectName=app
+        -Dsonar.python.version=3.10
+        -Dsonar.sources=system_info_app
+        -Dsonar.tests=system_info_app/test
+        -Dsonar.test.inclusions=**/test/**,**/tests/**
+        -Dsonar.coverage.exclusions=**/test/**,**/tests/**
+    
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────
+  # Main Pipeline - Ambiente PRO
+  # ──────────────────────────────────────────────────────────
+  main-pipeline-pro:
+    name: 🚀 Pipeline Completo - PRO
+    needs: test
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/main-pipeline.yml@main
+    with:
+      docker_image: mi-aplicacion
+      dockerhub_username: dariasmoises979
+      environment: pro
+      
+      # Configuración del repo externo
+      external_repo: dariasmoises979-blip/app
+      external_repo_ref: main
+      external_repo_path: ./app-repo
+      
+      # Rutas del build
+      dockerfile_path: ./app-repo/local/Dockerfile
+      build_context: ./app-repo
+      
+      # Opciones
+      enable_security_scan: true
+      enable_sonar: true
+    
+      # Configuración de SonarCloud
+      sonar_project_base_dir: "./pipeline-build"
+      sonar_args: >
+        -Dsonar.organization=dariasmoises979-blip
+        -Dsonar.projectKey=dariasmoises979-blip_app
+        -Dsonar.projectName=app
+        -Dsonar.python.version=3.10
+        -Dsonar.sources=system_info_app
+        -Dsonar.tests=system_info_app/test
+        -Dsonar.test.inclusions=**/test/**,**/tests/**
+        -Dsonar.coverage.exclusions=**/test/**,**/tests/**
+    
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 6: RESUMEN FINAL (OPCIONAL)
+  # ═══════════════════════════════════════════════════════════
+  summary:
+    name: 📊 Resumen Final del Pipeline
+    needs: 
+      - security-pre
+      - security-staging
+      - security-pro
+      - hybrid-pre
+      - hybrid-staging
+      - hybrid-pro
+      - main-pipeline-pre
+      - main-pipeline-staging
+      - main-pipeline-pro
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: 📋 Generar resumen consolidado
+        run: |
+          echo "## 📊 Resumen del Pipeline Completo" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🏗️ Build de Imágenes" >> $GITHUB_STEP_SUMMARY
+          echo "| Ambiente | Estado |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| PRE | ${{ needs.build-image-pre.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| STAGING | ${{ needs.build-image-staging.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PRO | ${{ needs.build-image-pro.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🔐 Análisis de Seguridad" >> $GITHUB_STEP_SUMMARY
+          echo "| Ambiente | Estado |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| PRE | ${{ needs.security-pre.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| STAGING | ${{ needs.security-staging.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PRO | ${{ needs.security-pro.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🔄 Build Híbrido" >> $GITHUB_STEP_SUMMARY
+          echo "| Ambiente | Estado |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| PRE | ${{ needs.hybrid-pre.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| STAGING | ${{ needs.hybrid-staging.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PRO | ${{ needs.hybrid-pro.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🚀 Pipeline Completo" >> $GITHUB_STEP_SUMMARY
+          echo "| Ambiente | Estado |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| PRE | ${{ needs.main-pipeline-pre.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| STAGING | ${{ needs.main-pipeline-staging.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PRO | ${{ needs.main-pipeline-pro.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "🎯 **Acción**: Revisa los artefactos de cada ambiente en la sección de Artifacts" >> $GITHUB_STEP_SUMMARY
