@@ -179,7 +179,7 @@ jobs:
       image_tag: ${{ needs.build-docker-image.outputs.image_tag }}
       dockerhub_username: "tu-usuario"  # 👈 Debe coincidir con el de build
       docker_image: "mi-aplicacion"      # 👈 Debe coincidir con el de build
-      manifests_path: "k8s"              # 👈 Ruta a tus manifiestos
+      manifests_path: "kubernetes"              # 👈 Ruta a tus manifiestos
       manifest_file_pattern: "*.yaml"
       commit_message_prefix: "[GitOps]"
     secrets: inherit
@@ -203,7 +203,7 @@ jobs:
       image_tag: ${{ needs.build-docker-image.outputs.image_tag }}
       dockerhub_username: "tu-usuario"
       docker_image: "mi-aplicacion"
-      manifests_path: "k8s"
+      manifests_path: "kubernetes"
       manifest_file_pattern: "*.yaml"
       commit_message_prefix: "[GitOps]"
       requires_approval: true
