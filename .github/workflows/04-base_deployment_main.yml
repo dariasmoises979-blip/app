@@ -205,22 +205,9 @@ jobs:
     secrets: inherit
 
 
-  # ───────────────────────────────────────────────────────────
-  # Job 6: Crear PR a Mai
-  # ───────────────────────────────────────────────────────────
-  create-pr-to-integration:
-    name: Create PR to Integration
-    needs: deploy-manual
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
-    with:
-      source_branch: 'integration'
-      target_branch: 'main'
-      pr_title: '🚀 Deploy integration to main'
-      environment: 'integration'
-      labels: 'automated,deployment,main,integretation'
 
   # ═══════════════════════════════════════════════════════════
-  # 📊 JOB 7: RESUMEN FINAL
+  # 📊 JOB 6: RESUMEN FINAL
   # ═══════════════════════════════════════════════════════════
   summary:
     name: 📊 Pipeline Summary
