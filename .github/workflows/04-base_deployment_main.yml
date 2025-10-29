@@ -120,18 +120,23 @@ jobs:
     needs: determine-environment
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main
     with:
-      docker_image: "mi-aplicacion"  # 👈 Cambiar por tu nombre de imagen
-      dockerhub_username: "tu-usuario"  # 👈 Cambiar por tu usuario de Docker Hub
-      environment: ${{ needs.determine-environment.outputs.environment }}
-      dockerfile_path: "./Dockerfile"
-      build_context: "."
-      # Opcional: si necesitas clonar un repo externo
-      # external_repo: "usuario/repo-externo"
-      # external_repo_ref: "main"
-      # external_repo_path: "./external"
+        docker_image: mi-aplicacion
+        dockerhub_username: dariasmoises979
+        environment: qa
+        
+        # Configuración del repo externo
+        external_repo: dariasmoises979-blip/app
+        external_repo_ref: main
+        external_repo_path: ./app-repo
+        
+        # Rutas del build
+        dockerfile_path: ./app-repo/local/Dockerfile
+        build_context: ./app-repo                    # ✅ Sin barra final (correcto)
+        
     secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      # EXTERNAL_REPO_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+  
 
   # ═══════════════════════════════════════════════════════════
   # 📊 JOB 3: MOSTRAR TAG GENERADO
@@ -205,22 +210,9 @@ jobs:
     secrets: inherit
 
 
-  # ───────────────────────────────────────────────────────────
-  # Job 6: Crear PR a Mai
-  # ───────────────────────────────────────────────────────────
-  create-pr-to-integration:
-    name: Create PR to Integration
-    needs: deploy-manual
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
-    with:
-      source_branch: 'integration'
-      target_branch: 'main'
-      pr_title: '🚀 Deploy integration to main'
-      environment: 'integration'
-      labels: 'automated,deployment,main,integretation'
 
   # ═══════════════════════════════════════════════════════════
-  # 📊 JOB 7: RESUMEN FINAL
+  # 📊 JOB 6: RESUMEN FINAL
   # ═══════════════════════════════════════════════════════════
   summary:
     name: 📊 Pipeline Summary
