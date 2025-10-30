@@ -27,8 +27,6 @@ jobs:
   get-image-tags:
     name: 📥 Get Image Tags from Build
     runs-on: ubuntu-latest
-    # Solo ejecutar si el workflow anterior fue exitoso
-    if: ${{ github.ref == 'refs/heads/main' }}
     outputs:
       tag_pre: ${{ steps.read-info.outputs.tag_pre }}
       tag_staging: ${{ steps.read-info.outputs.tag_staging }}
@@ -54,7 +52,8 @@ jobs:
       - name: Download artifact from integration workflow
         uses: actions/download-artifact@v4
         with:
-          name: image-info
+          name: image-info.env
+          repository: dariasmoises979-blip/app
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
