@@ -49,13 +49,28 @@ jobs:
           echo "🕐 Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: Download artifact from integration workflow
+      - id: find-run
+        name: Find latest successful integration run
+        run: |
+            workflow_file="integration.yml"   # <- ajusta al nombre de tu workflow productor
+            repo="dariasmoises979-blip/app"
+            api="https://api.github.com/repos/${repo}/actions/workflows/${workflow_file}/runs?per_page=20"
+            run_id=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$api" \
+              | jq -r '.workflow_runs[] | select(.conclusion=="success") | .id' | head -n1)
+            if [ -z "$run_id" ]; then
+              echo "No successful run found for $workflow_file" >&2
+              exit 1
+            fi
+            echo "run_id=$run_id" >> $GITHUB_OUTPUT
+        
+      - name: Download artifact from latest run
         uses: actions/download-artifact@v4
         with:
-          name: image-info.env
-          repository: dariasmoises979-blip/app
-          run-id: ${{ github.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+            name: image-info.env
+            repository: dariasmoises979-blip/app
+            run-id: ${{ steps.find-run.outputs.run_id }}
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+        
 
       - name: Verify artifact downloaded
         run: |
