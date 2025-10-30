@@ -8,10 +8,9 @@
 name: Deploy to Environments
 
 on:
-  workflow_run:
-    workflows: ["Run Qa Tests"]  # Nombre del workflow 03-integration_base.yml
-    types:
-      - completed
+  push:
+    branches:
+      - integration
 
   # Permitir ejecución manual para re-deploys
   workflow_dispatch:
