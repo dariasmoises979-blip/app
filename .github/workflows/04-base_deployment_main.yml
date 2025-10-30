@@ -10,7 +10,7 @@ name: Deploy to Environments
 on:
   push:
     branches:
-      - integration
+      - main
 
   # Permitir ejecución manual para re-deploys
   workflow_dispatch:
