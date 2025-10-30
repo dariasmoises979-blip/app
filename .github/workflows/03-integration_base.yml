@@ -112,6 +112,7 @@ jobs:
       image_tag: "pre"
       dockerhub_username: "dariasmoises979"
       enable_sonar: true
+      artifact_name: "security-reports-pre-${{ github.run_id }}"
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -128,6 +129,7 @@ jobs:
       image_tag: "staging"
       dockerhub_username: "dariasmoises979"
       enable_sonar: true
+      artifact_name: "security-reports-staging-${{ github.run_id }}"
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -144,6 +146,7 @@ jobs:
       image_tag: "pro"
       dockerhub_username: "dariasmoises979"
       enable_sonar: true
+      artifact_name: "security-reports-pro-${{ github.run_id }}" 
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
