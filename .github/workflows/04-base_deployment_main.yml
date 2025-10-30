@@ -8,12 +8,25 @@
 name: Deploy Updated Images
 
 on:
-  workflow_run:
-    workflows: ["Run Qa Tests"]  # Nombre exacto del workflow 03-integration_base.yml
-    types:
-      - completed
+  push:
     branches:
-      - integration  # Solo cuando corre en la rama integration
+      - main
+
+  # Permitir ejecución manual para re-deploys
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - pre
+          - staging
+          - pro
+      workflow_run_id:
+        description: 'Workflow Run ID to get artifacts from (leave empty for latest)'
+        required: false
+        type: string
 
 permissions:
   actions: read
