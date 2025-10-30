@@ -8,12 +8,13 @@
 name: Deploy Updated Images
 
 on:
-  workflow_run:
-    workflows: ["Run Qa Tests"]  # Nombre exacto del workflow 03-integration_base.yml
-    types:
-      - completed
+  push:
     branches:
-      - integration  # Solo cuando corre en la rama integration
+      - main
+  pull_request:
+    branches:
+      - main
+
 
 permissions:
   actions: read
@@ -27,7 +28,7 @@ jobs:
     name: 📥 Get Image Tags from Build
     runs-on: ubuntu-latest
     # Solo ejecutar si el workflow anterior fue exitoso
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     outputs:
       tag_pre: ${{ steps.read-info.outputs.tag_pre }}
       tag_staging: ${{ steps.read-info.outputs.tag_staging }}
@@ -42,11 +43,11 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🎯 DEPLOYMENT WORKFLOW TRIGGERED"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📋 Triggered by workflow: ${{ github.event.workflow_run.name }}"
-          echo "✅ Workflow status: ${{ github.event.workflow_run.conclusion }}"
-          echo "🔢 Workflow Run ID: ${{ github.event.workflow_run.id }}"
-          echo "🌿 Branch: ${{ github.event.workflow_run.head_branch }}"
-          echo "👤 Triggered by: ${{ github.event.workflow_run.actor.login }}"
+          echo "📋 Triggered by workflow: "Push/PR to main""
+          echo "✅ Workflow status: ${{ github.event_name }}"
+          echo "🔢 Workflow Run ID: ${{ github.run_id }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "👤 Triggered by: ${{ github.actor }}"
           echo "🕐 Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -54,7 +55,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: image-info
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify artifact downloaded
@@ -231,7 +232,7 @@ jobs:
           echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo ""
           echo "🔗 Source Build:"
-          echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}"
+          echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Check for Failures
@@ -314,7 +315,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- [Source Build](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Source Build](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
           echo "- [Docker Hub](https://hub.docker.com/r/${{ needs.get-image-tags.outputs.dockerhub_username }}/${{ needs.get-image-tags.outputs.docker_image }}/tags)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
