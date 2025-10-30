@@ -1,5 +1,5 @@
 📄 README.md — versión resumida para GitHub
-# 🖥️ systemdsd_infgibkjbogrbjdfhgsdkjb_affsswdepydsdyfp4ffknbvbkddf
+# 🖥️ systemdsd_infgibkjbogrbjdfdkjb_affsswdepydsdyfp4ffknbvbkddf
 jbjksdfdswredsas
 
 Aplicación web simple construida con **Python + Flask** para mostrar información del sistema donde se ejecuta.
