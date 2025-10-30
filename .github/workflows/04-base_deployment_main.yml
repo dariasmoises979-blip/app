@@ -2,6 +2,7 @@
 # 🚀 CI/CD PIPELINE COMPLETO
 # Build de imagen Docker + GitOps deployment con ArgoCD
 # 🆕 USA EL TAG GENERADO POR EL BUILD
+#04-base_deployment_main.yml
 ########################################
 
 name: CI/CD Pipeline
@@ -10,12 +11,10 @@ on:
   push:
     branches:
       - main
-      - develop
-      - 'release/**'
+
   pull_request:
     branches:
       - main
-      - develop
 
   # Permitir ejecución manual con selección de entorno
   workflow_dispatch:
@@ -25,7 +24,7 @@ on:
         required: true
         type: choice
         options:
-          - dev
+          - qa
           - staging
           - pre
           - prod
