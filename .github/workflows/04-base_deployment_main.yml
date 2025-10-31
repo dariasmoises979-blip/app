@@ -25,6 +25,11 @@ on:
         type: boolean
         default: false
   
+  # Se dispara cuando se hace push a main desde integration
+  push:
+    branches:
+      - main
+  
   # También puede ser llamado desde integration workflow
   workflow_run:
     workflows: ["Run Qa Tests"]
