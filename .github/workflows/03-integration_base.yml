@@ -383,7 +383,7 @@ jobs:
           FULL_IMAGE_STAGING=${{ needs.build-image-staging.outputs.full_image }}
           FULL_IMAGE_PRO=${{ needs.build-image-pro.outputs.full_image }}
           SHORT_SHA=${{ needs.build-image-pre.outputs.short_sha }}
-          BUILD_DATE=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          BUILD_DATE="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"  
           COMMIT_SHA=${{ github.sha }}
           TRIGGERED_BY=${{ github.actor }}
           WORKFLOW_RUN=${{ github.run_id }}
