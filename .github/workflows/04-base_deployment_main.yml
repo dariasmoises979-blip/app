@@ -13,8 +13,7 @@ on:
       - main
   pull_request:
     branches:
-      - main
-
+      - mainn
 
 permissions:
   actions: read
@@ -27,6 +26,8 @@ jobs:
   get-image-tags:
     name: 📥 Get Image Tags from Build
     runs-on: ubuntu-latest
+    # Solo ejecutar si el workflow anterior fue exitoso
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     outputs:
       tag_pre: ${{ steps.read-info.outputs.tag_pre }}
       tag_staging: ${{ steps.read-info.outputs.tag_staging }}
@@ -41,36 +42,20 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🎯 DEPLOYMENT WORKFLOW TRIGGERED"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📋 Triggered by workflow: "Push/PR to main""
-          echo "✅ Workflow status: ${{ github.event_name }}"
-          echo "🔢 Workflow Run ID: ${{ github.run_id }}"
-          echo "🌿 Branch: ${{ github.ref_name }}"
-          echo "👤 Triggered by: ${{ github.actor }}"
+          echo "📋 Triggered by workflow: ${{ github.event.workflow_run.name }}"
+          echo "✅ Workflow status: ${{ github.event.workflow_run.conclusion }}"
+          echo "🔢 Workflow Run ID: ${{ github.event.workflow_run.id }}"
+          echo "🌿 Branch: ${{ github.event.workflow_run.head_branch }}"
+          echo "👤 Triggered by: ${{ github.event.workflow_run.actor.login }}"
           echo "🕐 Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - id: find-run
-        name: Find latest successful integration run
-        run: |
-            workflow_file="integration.yml"   # <- ajusta al nombre de tu workflow productor
-            repo="dariasmoises979-blip/app"
-            api="https://api.github.com/repos/${repo}/actions/workflows/${workflow_file}/runs?per_page=20"
-            run_id=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$api" \
-              | jq -r '.workflow_runs[] | select(.conclusion=="success") | .id' | head -n1)
-            if [ -z "$run_id" ]; then
-              echo "No successful run found for $workflow_file" >&2
-              exit 1
-            fi
-            echo "run_id=$run_id" >> $GITHUB_OUTPUT
-        
-      - name: Download artifact from latest run
+      - name: Download artifact from integration workflow
         uses: actions/download-artifact@v4
         with:
-            name: image-info.env
-            repository: dariasmoises979-blip/app
-            run-id: ${{ steps.find-run.outputs.run_id }}
-            github-token: ${{ secrets.GITHUB_TOKEN }}
-        
+          name: image-info
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify artifact downloaded
         run: |
@@ -246,7 +231,7 @@ jobs:
           echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo ""
           echo "🔗 Source Build:"
-          echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Check for Failures
@@ -329,7 +314,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- [Source Build](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Source Build](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }})" >> $GITHUB_STEP_SUMMARY
           echo "- [Docker Hub](https://hub.docker.com/r/${{ needs.get-image-tags.outputs.dockerhub_username }}/${{ needs.get-image-tags.outputs.docker_image }}/tags)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
