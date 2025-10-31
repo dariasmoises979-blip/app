@@ -161,12 +161,13 @@ jobs:
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
+      project_name: ${{ github.event.repository.name }}
       docker_image: ${{ needs.get-image-info.outputs.docker_image }}
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: pre
       image_tag: ${{ needs.get-image-info.outputs.tag_pre }}
-      manifests_path: kubernetes/pre
-      manifest_files: deployment.yaml
+      manifests_path: kubernetes/pre/${{ github.event.repository.name }}
+      manifest_files: app.yaml
       create_pr: false
       target_branch: main
     secrets:
@@ -183,12 +184,13 @@ jobs:
       (needs.deploy-pre.result == 'success' && github.event_name == 'workflow_run')
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
+      project_name: ${{ github.event.repository.name }}
       docker_image: ${{ needs.get-image-info.outputs.docker_image }}
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: staging
       image_tag: ${{ needs.get-image-info.outputs.tag_staging }}
-      manifests_path: kubernetes/staging
-      manifest_files: deployment.yaml
+      manifests_path: kubernetes/staging/${{ github.event.repository.name }}
+      manifest_files: app.yaml
       create_pr: false
       target_branch: main
     secrets:
@@ -206,13 +208,14 @@ jobs:
       (github.event.inputs.environment == 'pro' || needs.deploy-staging.result == 'success')
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
+      project_name: ${{ github.event.repository.name }}
       docker_image: ${{ needs.get-image-info.outputs.docker_image }}
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: pro
       image_tag: ${{ needs.get-image-info.outputs.tag_pro }}
-      manifests_path: kubernetes/pro
-      manifest_files: deployment.yaml
-      create_pr: true  # Para PRO crear PR en lugar de commit directo
+      manifests_path: kubernetes/pro/${{ github.event.repository.name }}
+      manifest_files: app.yaml
+      create_pr: true
       target_branch: main
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
