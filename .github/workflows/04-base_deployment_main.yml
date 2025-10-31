@@ -2,7 +2,7 @@
 # 🚀 WORKFLOW: Deploy to Kubernetes
 # Descarga los tags generados por el build pipeline
 # y actualiza los manifiestos de Kubernetes
-# 04-deploy-k8s.yml
+# 04-deploy-kubernetes.yml
 ########################################
 
 name: Deploy to Kubernetes
@@ -154,13 +154,13 @@ jobs:
     if: |
       github.event.inputs.environment == 'pre' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/update-k8s-manifests.yml@main
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       docker_image: ${{ needs.get-image-info.outputs.docker_image }}
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: pre
       image_tag: ${{ needs.get-image-info.outputs.tag_pre }}
-      manifests_path: k8s/overlays/pre
+      manifests_path: kubernetes/pre
       manifest_files: deployment.yaml
       create_pr: false
       target_branch: main
@@ -176,13 +176,13 @@ jobs:
     if: |
       github.event.inputs.environment == 'staging' ||
       (needs.deploy-pre.result == 'success' && github.event_name == 'workflow_run')
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/update-k8s-manifests.yml@main
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       docker_image: ${{ needs.get-image-info.outputs.docker_image }}
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: staging
       image_tag: ${{ needs.get-image-info.outputs.tag_staging }}
-      manifests_path: k8s/overlays/staging
+      manifests_path: kubernetes/staging
       manifest_files: deployment.yaml
       create_pr: false
       target_branch: main
@@ -199,13 +199,13 @@ jobs:
       always() &&
       (needs.approval.result == 'success' || needs.approval.result == 'skipped') &&
       (github.event.inputs.environment == 'pro' || needs.deploy-staging.result == 'success')
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/update-k8s-manifests.yml@main
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       docker_image: ${{ needs.get-image-info.outputs.docker_image }}
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: pro
       image_tag: ${{ needs.get-image-info.outputs.tag_pro }}
-      manifests_path: k8s/overlays/pro
+      manifests_path: kubernetes/pro
       manifest_files: deployment.yaml
       create_pr: true  # Para PRO crear PR en lugar de commit directo
       target_branch: main
