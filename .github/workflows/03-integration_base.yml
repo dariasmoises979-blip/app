@@ -401,7 +401,8 @@ jobs:
         with:
           name: image-info
           path: image-info.env
-          retention-days: 30
+          retention-days: 3
+          overwrite: true
 
   # ═══════════════════════════════════════════════════════════
   # JOB 7: RESUMEN FINAL (MANTENIDO DEL ORIGINAL)
