@@ -1,8 +1,8 @@
 ########################################
 # 🚀 WORKFLOW: Deploy to Kubernetes
 # Descarga los tags generados por el build pipeline
-# y actualiza los manifiestos de Kubernetes
-# 04-deploy-kubernetes.yml
+# y actualiza los manifiestos de Kubernetes y Helm
+# 04-deploy-kubernetes.yml v2.0
 ########################################
 
 name: Deploy to Kubernetes
@@ -21,6 +21,11 @@ on:
           - pro
       skip_approval:
         description: 'Omitir aprobación manual'
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Modo dry-run (solo preview)'
         required: false
         type: boolean
         default: false
@@ -166,10 +171,9 @@ jobs:
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: pre
       image_tag: ${{ needs.get-image-info.outputs.tag_pre }}
-      manifests_path: kubernetes/pre/${{ github.event.repository.name }}
-      manifest_files: app.yaml
       create_pr: false
       target_branch: main
+      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
 
@@ -189,10 +193,9 @@ jobs:
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: staging
       image_tag: ${{ needs.get-image-info.outputs.tag_staging }}
-      manifests_path: kubernetes/staging/${{ github.event.repository.name }}
-      manifest_files: app.yaml
       create_pr: false
       target_branch: main
+      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
 
@@ -213,10 +216,9 @@ jobs:
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: pro
       image_tag: ${{ needs.get-image-info.outputs.tag_pro }}
-      manifests_path: kubernetes/pro/${{ github.event.repository.name }}
-      manifest_files: app.yaml
       create_pr: true
       target_branch: main
+      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
 
@@ -240,23 +242,47 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### 🐳 Docker Images" >> $GITHUB_STEP_SUMMARY
-          echo "| Environment | Image Tag | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| PRE | \`${{ needs.get-image-info.outputs.tag_pre }}\` | ${{ needs.deploy-pre.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| STAGING | \`${{ needs.get-image-info.outputs.tag_staging }}\` | ${{ needs.deploy-staging.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| PRO | \`${{ needs.get-image-info.outputs.tag_pro }}\` | ${{ needs.deploy-pro.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | Image Tag | Status | Files Updated |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------------|-----------|--------|---------------|" >> $GITHUB_STEP_SUMMARY
+          
+          PRE_K8S="${{ needs.deploy-pre.outputs.k8s_files_count || '0' }}"
+          PRE_HELM="${{ needs.deploy-pre.outputs.helm_files_count || '0' }}"
+          PRE_TOTAL=$((PRE_K8S + PRE_HELM))
+          echo "| PRE | \`${{ needs.get-image-info.outputs.tag_pre }}\` | ${{ needs.deploy-pre.result }} | ${PRE_TOTAL} (K8s: ${PRE_K8S}, Helm: ${PRE_HELM}) |" >> $GITHUB_STEP_SUMMARY
+          
+          STG_K8S="${{ needs.deploy-staging.outputs.k8s_files_count || '0' }}"
+          STG_HELM="${{ needs.deploy-staging.outputs.helm_files_count || '0' }}"
+          STG_TOTAL=$((STG_K8S + STG_HELM))
+          echo "| STAGING | \`${{ needs.get-image-info.outputs.tag_staging }}\` | ${{ needs.deploy-staging.result }} | ${STG_TOTAL} (K8s: ${STG_K8S}, Helm: ${STG_HELM}) |" >> $GITHUB_STEP_SUMMARY
+          
+          PRO_K8S="${{ needs.deploy-pro.outputs.k8s_files_count || '0' }}"
+          PRO_HELM="${{ needs.deploy-pro.outputs.helm_files_count || '0' }}"
+          PRO_TOTAL=$((PRO_K8S + PRO_HELM))
+          echo "| PRO | \`${{ needs.get-image-info.outputs.tag_pro }}\` | ${{ needs.deploy-pro.result }} | ${PRO_TOTAL} (K8s: ${PRO_K8S}, Helm: ${PRO_HELM}) |" >> $GITHUB_STEP_SUMMARY
+          
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### 📋 Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Project**: \`${{ github.event.repository.name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Docker Image**: \`${{ needs.get-image-info.outputs.docker_image }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **DockerHub User**: \`${{ needs.get-image-info.outputs.dockerhub_username }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit SHA**: \`${{ needs.get-image-info.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "- **Mode**: 🔍 Dry-run (preview only)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 📂 Updated Paths" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔷 Kubernetes: \`kubernetes/{env}/${{ github.event.repository.name }}/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎯 Helm: \`helm/override/{env}/\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
-          echo "- [DockerHub](${{ github.server_url }}/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [DockerHub Repository](https://hub.docker.com/r/${{ needs.get-image-info.outputs.dockerhub_username }}/${{ needs.get-image-info.outputs.docker_image }})" >> $GITHUB_STEP_SUMMARY
           echo "- [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
@@ -266,6 +292,12 @@ jobs:
              [[ "${{ needs.deploy-pro.result }}" == "success" || "${{ needs.deploy-pro.result }}" == "skipped" ]]; then
             echo "### ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
             echo "All environments have been updated successfully!" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
+              TOTAL_FILES=$((PRE_TOTAL + STG_TOTAL + PRO_TOTAL))
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Total files updated across all environments: ${TOTAL_FILES}**" >> $GITHUB_STEP_SUMMARY
+            fi
           else
             echo "### ⚠️ Deployment Incomplete" >> $GITHUB_STEP_SUMMARY
             echo "Some environments failed or were skipped. Check the logs above." >> $GITHUB_STEP_SUMMARY
@@ -277,13 +309,19 @@ jobs:
           echo "📊 KUBERNETES DEPLOYMENT SUMMARY"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
+          echo "📦 Project: ${{ github.event.repository.name }}"
           echo "🐳 Docker Image: ${{ needs.get-image-info.outputs.docker_image }}"
           echo "🔗 Commit SHA: ${{ needs.get-image-info.outputs.short_sha }}"
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "🔍 Mode: Dry-run (preview only)"
+          fi
+          
           echo ""
           echo "📋 Deployment Status:"
-          echo "   • PRE:     ${{ needs.deploy-pre.result }}"
-          echo "   • STAGING: ${{ needs.deploy-staging.result }}"
-          echo "   • PRO:     ${{ needs.deploy-pro.result }}"
+          echo "   • PRE:     ${{ needs.deploy-pre.result }} (K8s: ${{ needs.deploy-pre.outputs.k8s_files_count || '0' }}, Helm: ${{ needs.deploy-pre.outputs.helm_files_count || '0' }})"
+          echo "   • STAGING: ${{ needs.deploy-staging.result }} (K8s: ${{ needs.deploy-staging.outputs.k8s_files_count || '0' }}, Helm: ${{ needs.deploy-staging.outputs.helm_files_count || '0' }})"
+          echo "   • PRO:     ${{ needs.deploy-pro.result }} (K8s: ${{ needs.deploy-pro.outputs.k8s_files_count || '0' }}, Helm: ${{ needs.deploy-pro.outputs.helm_files_count || '0' }})"
           echo ""
           echo "🏷️  Tags Used:"
           echo "   • PRE:     ${{ needs.get-image-info.outputs.tag_pre }}"
