@@ -18,15 +18,14 @@ jobs:
       projectBaseDir: "./pipeline-build"  # ✅ Nuevo
       sonar_args: >
         -Dsonar.organization=dariasmoises979-blip
-        -Dsonar.projectKey=dariasmoises979-blip_app
-        -Dsonar.projectName=app
-        -Dsonar.python.version=3.10
-        -Dsonar.sources=system_info_app
-        -Dsonar.tests=system_info_app/test
-        -Dsonar.test.inclusions=**/test/**,**/tests/**
-        -Dsonar.coverage.exclusions=**/test/**,**/tests/**
+        -Dsonar.projectKey=dariasmoises979-blip_pipeline-build
+        -Dsonar.projectName=pipeline-build
+        -Dsonar.projectVersion=1.0
+        -Dsonar.sources=.github/workflows
+        -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/app-repo/**
+        -Dsonar.sourceEncoding=UTF-8
     secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_PIPELINE }}
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
 
   # ───────────────────────────────────────────────────────────
