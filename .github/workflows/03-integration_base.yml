@@ -291,7 +291,7 @@ jobs:
     
       # Configuración de SonarCloud
       sonar_args: >
-        -Dsonar.projectBaseDir=./pipeline-build
+        -Dsonar.projectBaseDir=.
         -Dsonar.organization=dariasmoises979-blip
         -Dsonar.projectKey=dariasmoises979-blip_app
         -Dsonar.projectName=app
@@ -337,7 +337,7 @@ jobs:
     
       # Configuración de SonarCloud
       sonar_args: >
-        -Dsonar.projectBaseDir=./pipeline-build
+        -Dsonar.projectBaseDir=.
         -Dsonar.organization=dariasmoises979-blip
         -Dsonar.projectKey=dariasmoises979-blip_app
         -Dsonar.projectName=app
@@ -383,7 +383,7 @@ jobs:
     
       # Configuración de SonarCloud
       sonar_args: >
-        -Dsonar.projectBaseDir=./pipeline-build
+        -Dsonar.projectBaseDir=.
         -Dsonar.organization=dariasmoises979-blip
         -Dsonar.projectKey=dariasmoises979-blip_app
         -Dsonar.projectName=app
