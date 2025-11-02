@@ -111,7 +111,7 @@ jobs:
     with:
       docker_image: mi-aplicacion
       #dockerhub_username: dariasmoises979
-      gcp_project_id: GCP_SA_KEY 
+      gcp_project_id: elite-ceremony-476307-s9 
       gcp_region: us-central1
       artifact_registry: artifact_dariasmoises979
      
