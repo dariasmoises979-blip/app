@@ -1,17 +1,20 @@
 ########################################
 # 🚀 WORKFLOW: Deploy to Kubernetes
-# Descarga los tags generados por el build pipeline
-# y actualiza los manifiestos de Kubernetes y Helm
-# 04-deploy-kubernetes.yml v2.0
+# Se ejecuta SOLO cuando hay un PR de integration a main
+# 04-deploy-kubernetes.yml v3.0 - PR ONLY
 ########################################
 
 name: Deploy to Kubernetes
 
 on:
-  push:
+  # Solo se ejecuta cuando hay PR de integration a main
+  pull_request:
     branches:
       - main
-
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   actions: read
@@ -20,15 +23,43 @@ permissions:
 
 jobs:
   # ═══════════════════════════════════════════════════════════
+  # JOB 0: VERIFICAR RAMA DE ORIGEN
+  # ═══════════════════════════════════════════════════════════
+  check-source:
+    name: 🔍 Verify Source Branch
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+    
+    steps:
+      - name: 🔍 Check if PR is from integration branch
+        id: check
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔍 CHECKING PR SOURCE BRANCH"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📌 PR from: ${{ github.event.pull_request.head.ref }}"
+          echo "📌 PR to: ${{ github.event.pull_request.base.ref }}"
+          echo "📌 PR number: #${{ github.event.pull_request.number }}"
+          echo ""
+          
+          if [ "${{ github.event.pull_request.head.ref }}" = "integration" ]; then
+            echo "✅ PR is from integration branch - Deployment will proceed"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "⏭️  PR is NOT from integration branch - Skipping deployment"
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+          fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # ═══════════════════════════════════════════════════════════
   # JOB 1: DESCARGAR INFORMACIÓN DE LAS IMÁGENES
   # ═══════════════════════════════════════════════════════════
   get-image-info:
     name: 📥 Get Image Info
+    needs: check-source
     runs-on: ubuntu-latest
-    # Solo si el workflow anterior fue exitoso o es manual
-    if: |
-      github.event_name == 'workflow_dispatch' || 
-      github.event.workflow_run.conclusion == 'success'
+    if: needs.check-source.outputs.should_deploy == 'true'
     
     outputs:
       image_name: ${{ steps.load_info.outputs.image_name }}
@@ -47,8 +78,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: image-info
-          # Si viene de workflow_run, necesitamos el run_id del workflow anterior
-          run-id: ${{ github.event.workflow_run.id || github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
@@ -58,6 +87,10 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📋 LOADING IMAGE INFORMATION"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔗 PR #${{ github.event.pull_request.number }}"
+          echo "🌿 Branch: ${{ github.event.pull_request.head.ref }}"
+          echo "📝 Commit: ${{ github.event.pull_request.head.sha }}"
+          echo ""
           
           if [ -f "image-info.env" ]; then
             echo "✅ Image info file found"
@@ -85,55 +118,28 @@ jobs:
             echo "✅ Image information loaded successfully"
           else
             echo "⚠️  Image info file not found"
-            echo "Using default values..."
+            echo "Using default values from PR commit..."
             
-            # Valores por defecto
+            # Valores por defecto basados en el commit del PR
+            SHORT_SHA="${{ github.event.pull_request.head.sha }}"
+            SHORT_SHA="${SHORT_SHA:0:7}"
+            
             echo "image_name=dariasmoises979/mi-aplicacion" >> $GITHUB_OUTPUT
             echo "dockerhub_username=dariasmoises979" >> $GITHUB_OUTPUT
             echo "docker_image=mi-aplicacion" >> $GITHUB_OUTPUT
-            echo "tag_pre=pre-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
-            echo "tag_staging=staging-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
-            echo "tag_pro=pro-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
-            echo "short_sha=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+            echo "tag_pre=pre-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "tag_staging=staging-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "tag_pro=pro-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
           fi
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   # ═══════════════════════════════════════════════════════════
-  # JOB 2: APROBACIÓN MANUAL (SOLO PARA PRO)
-  # ═══════════════════════════════════════════════════════════
-  approval:
-    name: 🔐 Approval Required
-    needs: get-image-info
-    runs-on: ubuntu-latest
-    # Solo requerir aprobación para PRO y si no se omite
-    if: |
-      (github.event.inputs.environment == 'pro' || 
-       (github.event_name == 'workflow_run' && contains(github.event.workflow_run.head_branch, 'main'))) &&
-      github.event.inputs.skip_approval != 'true'
-    environment:
-      name: production-approval
-    
-    steps:
-      - name: 🔐 Manual approval required
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🔐 DEPLOYMENT APPROVAL REQUIRED"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🌍 Environment: PRO"
-          echo "🐳 Image: ${{ needs.get-image-info.outputs.full_image_pro }}"
-          echo ""
-          echo "⏳ Waiting for manual approval..."
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-  # ═══════════════════════════════════════════════════════════
-  # JOB 3: DEPLOY A PRE
+  # JOB 2: DEPLOY A PRE
   # ═══════════════════════════════════════════════════════════
   deploy-pre:
     name: 🚀 Deploy to PRE
     needs: get-image-info
-    if: |
-      github.event.inputs.environment == 'pre' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       project_name: ${{ github.event.repository.name }}
@@ -141,21 +147,16 @@ jobs:
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: pre
       image_tag: ${{ needs.get-image-info.outputs.tag_pre }}
-      create_pr: false
       target_branch: main
-      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
 
   # ═══════════════════════════════════════════════════════════
-  # JOB 4: DEPLOY A STAGING
+  # JOB 3: DEPLOY A STAGING
   # ═══════════════════════════════════════════════════════════
   deploy-staging:
     name: 🚀 Deploy to STAGING
     needs: [get-image-info, deploy-pre]
-    if: |
-      github.event.inputs.environment == 'staging' ||
-      (needs.deploy-pre.result == 'success' && github.event_name == 'workflow_run')
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       project_name: ${{ github.event.repository.name }}
@@ -163,22 +164,16 @@ jobs:
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: staging
       image_tag: ${{ needs.get-image-info.outputs.tag_staging }}
-      create_pr: false
       target_branch: main
-      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
 
   # ═══════════════════════════════════════════════════════════
-  # JOB 5: DEPLOY A PRO (CON APROBACIÓN)
+  # JOB 4: DEPLOY A PRO
   # ═══════════════════════════════════════════════════════════
   deploy-pro:
     name: 🚀 Deploy to PRO
-    needs: [get-image-info, approval, deploy-staging]
-    if: |
-      always() &&
-      (needs.approval.result == 'success' || needs.approval.result == 'skipped') &&
-      (github.event.inputs.environment == 'pro' || needs.deploy-staging.result == 'success')
+    needs: [get-image-info, deploy-staging]
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       project_name: ${{ github.event.repository.name }}
@@ -186,29 +181,35 @@ jobs:
       dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
       environment: pro
       image_tag: ${{ needs.get-image-info.outputs.tag_pro }}
-      create_pr: true
       target_branch: main
-      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
 
   # ═══════════════════════════════════════════════════════════
-  # JOB 6: RESUMEN FINAL DEL DEPLOYMENT
+  # JOB 5: RESUMEN FINAL DEL DEPLOYMENT
   # ═══════════════════════════════════════════════════════════
   deployment-summary:
     name: 📊 Deployment Summary
     needs: 
+      - check-source
       - get-image-info
       - deploy-pre
       - deploy-staging
       - deploy-pro
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && needs.check-source.outputs.should_deploy == 'true'
     
     steps:
       - name: 📊 Generate deployment summary
         run: |
           echo "## 📊 Kubernetes Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🔀 Pull Request Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR**: #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **From**: \`${{ github.event.pull_request.head.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **To**: \`${{ github.event.pull_request.base.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.event.pull_request.head.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### 🐳 Docker Images" >> $GITHUB_STEP_SUMMARY
@@ -240,10 +241,6 @@ jobs:
           echo "- **Triggered by**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "- **Mode**: 🔍 Dry-run (preview only)" >> $GITHUB_STEP_SUMMARY
-          fi
-          
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### 📂 Updated Paths" >> $GITHUB_STEP_SUMMARY
@@ -253,6 +250,7 @@ jobs:
           
           echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
           echo "- [DockerHub Repository](https://hub.docker.com/r/${{ needs.get-image-info.outputs.dockerhub_username }}/${{ needs.get-image-info.outputs.docker_image }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Pull Request #${{ github.event.pull_request.number }}](${{ github.event.pull_request.html_url }})" >> $GITHUB_STEP_SUMMARY
           echo "- [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
@@ -263,11 +261,9 @@ jobs:
             echo "### ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
             echo "All environments have been updated successfully!" >> $GITHUB_STEP_SUMMARY
             
-            if [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
-              TOTAL_FILES=$((PRE_TOTAL + STG_TOTAL + PRO_TOTAL))
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "**Total files updated across all environments: ${TOTAL_FILES}**" >> $GITHUB_STEP_SUMMARY
-            fi
+            TOTAL_FILES=$((PRE_TOTAL + STG_TOTAL + PRO_TOTAL))
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Total files updated across all environments: ${TOTAL_FILES}**" >> $GITHUB_STEP_SUMMARY
           else
             echo "### ⚠️ Deployment Incomplete" >> $GITHUB_STEP_SUMMARY
             echo "Some environments failed or were skipped. Check the logs above." >> $GITHUB_STEP_SUMMARY
@@ -279,14 +275,10 @@ jobs:
           echo "📊 KUBERNETES DEPLOYMENT SUMMARY"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
+          echo "🔀 PR: #${{ github.event.pull_request.number }}"
           echo "📦 Project: ${{ github.event.repository.name }}"
           echo "🐳 Docker Image: ${{ needs.get-image-info.outputs.docker_image }}"
           echo "🔗 Commit SHA: ${{ needs.get-image-info.outputs.short_sha }}"
-          
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "🔍 Mode: Dry-run (preview only)"
-          fi
-          
           echo ""
           echo "📋 Deployment Status:"
           echo "   • PRE:     ${{ needs.deploy-pre.result }} (K8s: ${{ needs.deploy-pre.outputs.k8s_files_count || '0' }}, Helm: ${{ needs.deploy-pre.outputs.helm_files_count || '0' }})"
