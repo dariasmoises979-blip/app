@@ -8,40 +8,18 @@
 name: Deploy to Kubernetes
 
 on:
-  # Se ejecuta manualmente o desde otro workflow
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Entorno a desplegar (pro/pre/staging)'
-        required: true
-        type: choice
-        options:
-          - pre
-          - staging
-          - pro
-      skip_approval:
-        description: 'Omitir aprobación manual'
-        required: false
-        type: boolean
-        default: false
-      dry_run:
-        description: 'Modo dry-run (solo preview)'
-        required: false
-        type: boolean
-        default: false
-  
-  # Se dispara cuando se hace push a main desde integration
-  push:
+
+  # Solo se ejecuta cuando hay PR de integration a main
+  pull_request:
     branches:
       - main
-  
-  # También puede ser llamado desde integration workflow
-  workflow_run:
-    workflows: ["Run Qa Tests"]
+      - hotfix/**
     types:
-      - completed
-    branches:
-      - integration
+      - opened
+      - synchronize
+      - reopened
+
+
 
 permissions:
   actions: read
