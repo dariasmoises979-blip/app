@@ -107,10 +107,14 @@ jobs:
   build-image:
     name: Build Docker Image
     needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si los tests pasan
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image.yml@main  # 📂 Ruta al workflow reusable
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-gcp.yml@main  # 📂 Ruta al workflow reusable
     with:
       docker_image: mi-aplicacion
-      dockerhub_username: dariasmoises979
+      #dockerhub_username: dariasmoises979
+      gcp_project_id: elite-ceremony-476307-s9 
+      gcp_region: us-central1
+      artifact_registry: dariasmoises979
+     
       environment: qa
       
       # Configuración del repo externo
@@ -123,8 +127,9 @@ jobs:
       build_context: ./app-repo                    # ✅ Sin barra final (correcto)
       
     secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      #DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
 
  #############################################################################
  # ───────────────────────────────────────────────────────────
