@@ -20,32 +20,32 @@ jobs:
   # ═══════════════════════════════════════════════════════════
   # JOB 0: VERIFICAR RAMA DE ORIGEN
   # ═══════════════════════════════════════════════════════════
-  check-source:
-    name: 🔍 Verify Source Branch
-    runs-on: ubuntu-latest
-    outputs:
-      should_deploy: ${{ steps.check.outputs.should_deploy }}
+  # check-source:
+  #   name: 🔍 Verify Source Branch
+  #   runs-on: ubuntu-latest
+  #   outputs:
+  #     should_deploy: ${{ steps.check.outputs.should_deploy }}
     
-    steps:
-      - name: 🔍 Check if PR is from integration branch
-        id: check
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🔍 CHECKING PR SOURCE BRANCH"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📌 PR from: ${{ github.event.pull_request.head.ref }}"
-          echo "📌 PR to: ${{ github.event.pull_request.base.ref }}"
-          echo "📌 PR number: #${{ github.event.pull_request.number }}"
-          echo ""
+  #   steps:
+  #     - name: 🔍 Check if PR is from integration branch
+  #       id: check
+  #       run: |
+  #         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  #         echo "🔍 CHECKING PR SOURCE BRANCH"
+  #         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  #         echo "📌 PR from: ${{ github.event.pull_request.head.ref }}"
+  #         echo "📌 PR to: ${{ github.event.pull_request.base.ref }}"
+  #         echo "📌 PR number: #${{ github.event.pull_request.number }}"
+  #         echo ""
           
-          if [ "${{ github.event.pull_request.head.ref }}" = "integration" ]; then
-            echo "✅ PR is from integration branch - Deployment will proceed"
-            echo "should_deploy=true" >> $GITHUB_OUTPUT
-          else
-            echo "⏭️  PR is NOT from integration branch - Skipping deployment"
-            echo "should_deploy=false" >> $GITHUB_OUTPUT
-          fi
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  #         if [ "${{ github.event.pull_request.head.ref }}" = "integration" ]; then
+  #           echo "✅ PR is from integration branch - Deployment will proceed"
+  #           echo "should_deploy=true" >> $GITHUB_OUTPUT
+  #         else
+  #           echo "⏭️  PR is NOT from integration branch - Skipping deployment"
+  #           echo "should_deploy=false" >> $GITHUB_OUTPUT
+  #         fi
+  #         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   # ═══════════════════════════════════════════════════════════
   # JOB 1: DESCARGAR INFORMACIÓN DE LAS IMÁGENES
