@@ -8,17 +8,9 @@
 name: Deploy to Kubernetes
 
 on:
-
-  # Solo se ejecuta cuando hay PR de integration a main
-  pull_request:
+  push:
     branches:
       - main
-      
-    types:
-      - opened
-      - synchronize
-      - reopened
-
 
 
 permissions:
