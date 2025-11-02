@@ -29,7 +29,7 @@ jobs:
   build-image-pre:
     name: 🏗️ Build Docker Image - PRE
     needs: test
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-gcp.yml-gcp@main
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-gcp.yml@main
     with:
       docker_image: mi-aplicacion
       environment: pre
