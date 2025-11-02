@@ -1,0 +1,260 @@
+########################################
+# 🚀 WORKFLOW: Deploy to Kubernetes
+# Descarga los tags generados por el build pipeline
+# y actualiza los manifiestos de Kubernetes y Helm
+# 04-deploy-kubernetes.yml v2.2 - FULLY FIXED
+########################################
+
+name: Deploy to Kubernetes
+
+on:
+  # Solo se ejecuta cuando hay PR o merge de integration a main
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+  
+  push:
+    branches:
+      - main
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # JOB 1: DESCARGAR INFORMACIÓN DE LAS IMÁGENES
+  # ═══════════════════════════════════════════════════════════
+  get-image-info:
+    name: 📥 Get Image Info
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'integration') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    
+    outputs:
+      image_name: ${{ steps.load_info.outputs.image_name }}
+      dockerhub_username: ${{ steps.load_info.outputs.dockerhub_username }}
+      docker_image: ${{ steps.load_info.outputs.docker_image }}
+      tag_pre: ${{ steps.load_info.outputs.tag_pre }}
+      tag_staging: ${{ steps.load_info.outputs.tag_staging }}
+      tag_pro: ${{ steps.load_info.outputs.tag_pro }}
+      full_image_pre: ${{ steps.load_info.outputs.full_image_pre }}
+      full_image_staging: ${{ steps.load_info.outputs.full_image_staging }}
+      full_image_pro: ${{ steps.load_info.outputs.full_image_pro }}
+      short_sha: ${{ steps.load_info.outputs.short_sha }}
+    
+    steps:
+      - name: 📥 Download image info artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-info
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: 📋 Load image information
+        id: load_info
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 LOADING IMAGE INFORMATION"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          if [ -f "image-info.env" ]; then
+            echo "✅ Image info file found"
+            echo ""
+            echo "📄 Content:"
+            cat image-info.env
+            echo ""
+            
+            # Cargar variables del archivo
+            source image-info.env
+            
+            # Exportar como outputs
+            echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+            echo "dockerhub_username=${DOCKERHUB_USERNAME}" >> $GITHUB_OUTPUT
+            echo "docker_image=${DOCKER_IMAGE}" >> $GITHUB_OUTPUT
+            echo "tag_pre=${TAG_PRE}" >> $GITHUB_OUTPUT
+            echo "tag_staging=${TAG_STAGING}" >> $GITHUB_OUTPUT
+            echo "tag_pro=${TAG_PRO}" >> $GITHUB_OUTPUT
+            echo "full_image_pre=${FULL_IMAGE_PRE}" >> $GITHUB_OUTPUT
+            echo "full_image_staging=${FULL_IMAGE_STAGING}" >> $GITHUB_OUTPUT
+            echo "full_image_pro=${FULL_IMAGE_PRO}" >> $GITHUB_OUTPUT
+            echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+            
+            echo ""
+            echo "✅ Image information loaded successfully"
+          else
+            echo "⚠️  Image info file not found"
+            echo "Using default values..."
+            
+            # Valores por defecto
+            echo "image_name=dariasmoises979/mi-aplicacion" >> $GITHUB_OUTPUT
+            echo "dockerhub_username=dariasmoises979" >> $GITHUB_OUTPUT
+            echo "docker_image=mi-aplicacion" >> $GITHUB_OUTPUT
+            echo "tag_pre=pre-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+            echo "tag_staging=staging-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+            echo "tag_pro=pro-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+            echo "short_sha=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+          fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 2: DEPLOY A PRE
+  # ═══════════════════════════════════════════════════════════
+  deploy-pre:
+    name: 🚀 Deploy to PRE
+    needs: get-image-info
+    if: success()
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
+    with:
+      project_name: ${{ github.event.repository.name }}
+      docker_image: ${{ needs.get-image-info.outputs.docker_image }}
+      dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
+      environment: pre
+      image_tag: ${{ needs.get-image-info.outputs.tag_pre }}
+      target_branch: main
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 3: DEPLOY A STAGING
+  # ═══════════════════════════════════════════════════════════
+  deploy-staging:
+    name: 🚀 Deploy to STAGING
+    needs: [get-image-info, deploy-pre]
+    if: needs.deploy-pre.result == 'success'
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
+    with:
+      project_name: ${{ github.event.repository.name }}
+      docker_image: ${{ needs.get-image-info.outputs.docker_image }}
+      dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
+      environment: staging
+      image_tag: ${{ needs.get-image-info.outputs.tag_staging }}
+      target_branch: main
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 4: DEPLOY A PRO
+  # ═══════════════════════════════════════════════════════════
+  deploy-pro:
+    name: 🚀 Deploy to PRO
+    needs: [get-image-info, deploy-staging]
+    if: needs.deploy-staging.result == 'success'
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
+    with:
+      project_name: ${{ github.event.repository.name }}
+      docker_image: ${{ needs.get-image-info.outputs.docker_image }}
+      dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
+      environment: pro
+      image_tag: ${{ needs.get-image-info.outputs.tag_pro }}
+      target_branch: main
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 5: RESUMEN FINAL DEL DEPLOYMENT
+  # ═══════════════════════════════════════════════════════════
+  deployment-summary:
+    name: 📊 Deployment Summary
+    needs: 
+      - get-image-info
+      - deploy-pre
+      - deploy-staging
+      - deploy-pro
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: 📊 Generate deployment summary
+        run: |
+          echo "## 📊 Kubernetes Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🐳 Docker Images" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | Image Tag | Status | Files Updated |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------------|-----------|--------|---------------|" >> $GITHUB_STEP_SUMMARY
+          
+          PRE_K8S="${{ needs.deploy-pre.outputs.k8s_files_count || '0' }}"
+          PRE_HELM="${{ needs.deploy-pre.outputs.helm_files_count || '0' }}"
+          PRE_TOTAL=$((PRE_K8S + PRE_HELM))
+          echo "| PRE | \`${{ needs.get-image-info.outputs.tag_pre }}\` | ${{ needs.deploy-pre.result }} | ${PRE_TOTAL} (K8s: ${PRE_K8S}, Helm: ${PRE_HELM}) |" >> $GITHUB_STEP_SUMMARY
+          
+          STG_K8S="${{ needs.deploy-staging.outputs.k8s_files_count || '0' }}"
+          STG_HELM="${{ needs.deploy-staging.outputs.helm_files_count || '0' }}"
+          STG_TOTAL=$((STG_K8S + STG_HELM))
+          echo "| STAGING | \`${{ needs.get-image-info.outputs.tag_staging }}\` | ${{ needs.deploy-staging.result }} | ${STG_TOTAL} (K8s: ${STG_K8S}, Helm: ${STG_HELM}) |" >> $GITHUB_STEP_SUMMARY
+          
+          PRO_K8S="${{ needs.deploy-pro.outputs.k8s_files_count || '0' }}"
+          PRO_HELM="${{ needs.deploy-pro.outputs.helm_files_count || '0' }}"
+          PRO_TOTAL=$((PRO_K8S + PRO_HELM))
+          echo "| PRO | \`${{ needs.get-image-info.outputs.tag_pro }}\` | ${{ needs.deploy-pro.result }} | ${PRO_TOTAL} (K8s: ${PRO_K8S}, Helm: ${PRO_HELM}) |" >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 📋 Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Project**: \`${{ github.event.repository.name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docker Image**: \`${{ needs.get-image-info.outputs.docker_image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **DockerHub User**: \`${{ needs.get-image-info.outputs.dockerhub_username }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit SHA**: \`${{ needs.get-image-info.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 📂 Updated Paths" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔷 Kubernetes: \`kubernetes/{env}/${{ github.event.repository.name }}/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎯 Helm: \`helm/override/{env}/\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [DockerHub Repository](https://hub.docker.com/r/${{ needs.get-image-info.outputs.dockerhub_username }}/${{ needs.get-image-info.outputs.docker_image }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Estado general
+          if [[ "${{ needs.deploy-pre.result }}" == "success" ]] && \
+             [[ "${{ needs.deploy-staging.result }}" == "success" ]] && \
+             [[ "${{ needs.deploy-pro.result }}" == "success" || "${{ needs.deploy-pro.result }}" == "skipped" ]]; then
+            echo "### ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
+            echo "All environments have been updated successfully!" >> $GITHUB_STEP_SUMMARY
+            
+            TOTAL_FILES=$((PRE_TOTAL + STG_TOTAL + PRO_TOTAL))
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Total files updated across all environments: ${TOTAL_FILES}**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Deployment Incomplete" >> $GITHUB_STEP_SUMMARY
+            echo "Some environments failed or were skipped. Check the logs above." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: 📊 Console Summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 KUBERNETES DEPLOYMENT SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "📦 Project: ${{ github.event.repository.name }}"
+          echo "🐳 Docker Image: ${{ needs.get-image-info.outputs.docker_image }}"
+          echo "🔗 Commit SHA: ${{ needs.get-image-info.outputs.short_sha }}"
+          echo ""
+          echo "📋 Deployment Status:"
+          echo "   • PRE:     ${{ needs.deploy-pre.result }} (K8s: ${{ needs.deploy-pre.outputs.k8s_files_count || '0' }}, Helm: ${{ needs.deploy-pre.outputs.helm_files_count || '0' }})"
+          echo "   • STAGING: ${{ needs.deploy-staging.result }} (K8s: ${{ needs.deploy-staging.outputs.k8s_files_count || '0' }}, Helm: ${{ needs.deploy-staging.outputs.helm_files_count || '0' }})"
+          echo "   • PRO:     ${{ needs.deploy-pro.result }} (K8s: ${{ needs.deploy-pro.outputs.k8s_files_count || '0' }}, Helm: ${{ needs.deploy-pro.outputs.helm_files_count || '0' }})"
+          echo ""
+          echo "🏷️  Tags Used:"
+          echo "   • PRE:     ${{ needs.get-image-info.outputs.tag_pre }}"
+          echo "   • STAGING: ${{ needs.get-image-info.outputs.tag_staging }}"
+          echo "   • PRO:     ${{ needs.get-image-info.outputs.tag_pro }}"
+          echo ""
+          echo "👤 Triggered by: ${{ github.actor }}"
+          echo "🕐 Date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          
