@@ -2,9 +2,7 @@
 # 🚀 WORKFLOW: Deploy to Kubernetes
 # Se ejecuta SOLO cuando hay un PR de integration a main
 # 04-deploy-kubernetes.yml v3.0 - PR ONLY
-# TESTS
 ########################################
-
 
 name: Deploy to Kubernetes
 
