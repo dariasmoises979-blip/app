@@ -34,9 +34,27 @@ jobs:
         -Dsonar.coverage.exclusions=**/test/**,**/tests/**
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  # ───────────────────────────────────────────────────────────
+  # Deployment QA
+  # ───────────────────────────────────────────────────────────
+  deploy-qa:
+        name: 🚀 Deploy to STAGING
+        needs: test
+        uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
+        with:
+          project_name: ${{ github.event.repository.name }}
+          docker_image: ${{ needs.get-image-info.outputs.docker_image }}
+          gcp_project_id: ${{ needs.get-image-info.outputs.gcp_project_id }}
+          gcp_region: ${{ needs.get-image-info.outputs.gcp_region }}
+          artifact_registry: ${{ needs.get-image-info.outputs.artifact_registry }}
+          environment: qa
+          image_tag: ${{ needs.get-image-info.outputs.tag_staging }}
+          target_branch: main
+        secrets:
+          GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
   
   # ───────────────────────────────────────────────────────────
-  # Job 2: Crear PR a Integration
+  # Job 3: Crear PR a Integration
   # ───────────────────────────────────────────────────────────
   create-pr-to-integration:
     name: Create PR to Integration
@@ -50,7 +68,7 @@ jobs:
       labels: 'automated,deployment,integration,qa'
 
   # ───────────────────────────────────────────────────────────
-  # Job 3: Saludo Manual con Aprobación (SOLO MANUAL)
+  # Job 4: Saludo Manual con Aprobación (SOLO MANUAL)
   # ───────────────────────────────────────────────────────────
   saludar:
     runs-on: 'ubuntu-latest'
