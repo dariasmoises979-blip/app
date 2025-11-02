@@ -127,7 +127,7 @@ jobs:
       build_context: ./app-repo                    # ✅ Sin barra final (correcto)
       
     secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      #DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
 
