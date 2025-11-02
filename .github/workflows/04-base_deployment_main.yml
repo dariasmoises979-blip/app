@@ -1,7 +1,7 @@
 ########################################
-# 🚀 WORKFLOW: Deploy to Kubernetes
+# 🚀 WORKFLOW: Deploy to Kubernetes (GCP)
 # Se ejecuta cuando hay push a main
-# 04-deploy-kubernetes.yml v4.0 - FIXED
+# 04-deploy-kubernetes.yml v5.0 - GCP ARTIFACT REGISTRY
 ########################################
 
 name: Deploy to Kubernetes
@@ -26,8 +26,10 @@ jobs:
     
     outputs:
       image_name: ${{ steps.load_info.outputs.image_name }}
-      dockerhub_username: ${{ steps.load_info.outputs.dockerhub_username }}
       docker_image: ${{ steps.load_info.outputs.docker_image }}
+      gcp_project_id: ${{ steps.load_info.outputs.gcp_project_id }}
+      gcp_region: ${{ steps.load_info.outputs.gcp_region }}
+      artifact_registry: ${{ steps.load_info.outputs.artifact_registry }}
       tag_pre: ${{ steps.load_info.outputs.tag_pre }}
       tag_staging: ${{ steps.load_info.outputs.tag_staging }}
       tag_pro: ${{ steps.load_info.outputs.tag_pro }}
@@ -38,7 +40,7 @@ jobs:
         id: load_info
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📋 LOADING IMAGE INFORMATION"
+          echo "📋 LOADING IMAGE INFORMATION (GCP)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🌿 Branch: ${{ github.ref_name }}"
           echo "📝 Commit: ${{ github.sha }}"
@@ -48,10 +50,14 @@ jobs:
           SHORT_SHA="${{ github.sha }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
           
-          # Valores basados en el commit del push a main
-          DOCKERHUB_USERNAME="dariasmoises979"
+          # Configuración de GCP Artifact Registry
+          GCP_PROJECT_ID="elite-ceremony-476307-s9"
+          GCP_REGION="us-central1"
+          ARTIFACT_REGISTRY="artifact_dariasmoises979"
           DOCKER_IMAGE="mi-aplicacion"
-          IMAGE_NAME="${DOCKERHUB_USERNAME}/${DOCKER_IMAGE}"
+          
+          # Imagen completa en formato GCP
+          IMAGE_NAME="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE}"
           
           # Tags para cada entorno
           TAG_PRE="pre-${SHORT_SHA}"
@@ -60,8 +66,10 @@ jobs:
           
           # Exportar outputs
           echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "dockerhub_username=${DOCKERHUB_USERNAME}" >> $GITHUB_OUTPUT
           echo "docker_image=${DOCKER_IMAGE}" >> $GITHUB_OUTPUT
+          echo "gcp_project_id=${GCP_PROJECT_ID}" >> $GITHUB_OUTPUT
+          echo "gcp_region=${GCP_REGION}" >> $GITHUB_OUTPUT
+          echo "artifact_registry=${ARTIFACT_REGISTRY}" >> $GITHUB_OUTPUT
           echo "tag_pre=${TAG_PRE}" >> $GITHUB_OUTPUT
           echo "tag_staging=${TAG_STAGING}" >> $GITHUB_OUTPUT
           echo "tag_pro=${TAG_PRO}" >> $GITHUB_OUTPUT
@@ -69,6 +77,9 @@ jobs:
           
           echo ""
           echo "✅ Image information generated:"
+          echo "   • GCP Project: ${GCP_PROJECT_ID}"
+          echo "   • Region: ${GCP_REGION}"
+          echo "   • Registry: ${ARTIFACT_REGISTRY}"
           echo "   • Image: ${IMAGE_NAME}"
           echo "   • PRE tag: ${TAG_PRE}"
           echo "   • STAGING tag: ${TAG_STAGING}"
@@ -86,7 +97,9 @@ jobs:
     with:
       project_name: ${{ github.event.repository.name }}
       docker_image: ${{ needs.get-image-info.outputs.docker_image }}
-      dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
+      gcp_project_id: ${{ needs.get-image-info.outputs.gcp_project_id }}
+      gcp_region: ${{ needs.get-image-info.outputs.gcp_region }}
+      artifact_registry: ${{ needs.get-image-info.outputs.artifact_registry }}
       environment: pre
       image_tag: ${{ needs.get-image-info.outputs.tag_pre }}
       target_branch: main
@@ -103,7 +116,9 @@ jobs:
     with:
       project_name: ${{ github.event.repository.name }}
       docker_image: ${{ needs.get-image-info.outputs.docker_image }}
-      dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
+      gcp_project_id: ${{ needs.get-image-info.outputs.gcp_project_id }}
+      gcp_region: ${{ needs.get-image-info.outputs.gcp_region }}
+      artifact_registry: ${{ needs.get-image-info.outputs.artifact_registry }}
       environment: staging
       image_tag: ${{ needs.get-image-info.outputs.tag_staging }}
       target_branch: main
@@ -120,7 +135,9 @@ jobs:
     with:
       project_name: ${{ github.event.repository.name }}
       docker_image: ${{ needs.get-image-info.outputs.docker_image }}
-      dockerhub_username: ${{ needs.get-image-info.outputs.dockerhub_username }}
+      gcp_project_id: ${{ needs.get-image-info.outputs.gcp_project_id }}
+      gcp_region: ${{ needs.get-image-info.outputs.gcp_region }}
+      artifact_registry: ${{ needs.get-image-info.outputs.artifact_registry }}
       environment: pro
       image_tag: ${{ needs.get-image-info.outputs.tag_pro }}
       target_branch: main
@@ -143,13 +160,20 @@ jobs:
     steps:
       - name: 📊 Generate deployment summary
         run: |
-          echo "## 📊 Kubernetes Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Kubernetes Deployment Summary (GCP)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### 🔀 Push Info" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Message**: ${{ github.event.head_commit.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### ☁️ GCP Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Project**: \`${{ needs.get-image-info.outputs.gcp_project_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: \`${{ needs.get-image-info.outputs.gcp_region }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry**: \`${{ needs.get-image-info.outputs.artifact_registry }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Base Image**: \`${{ needs.get-image-info.outputs.image_name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### 🐳 Docker Images" >> $GITHUB_STEP_SUMMARY
@@ -176,7 +200,6 @@ jobs:
           echo "### 📋 Deployment Details" >> $GITHUB_STEP_SUMMARY
           echo "- **Project**: \`${{ github.event.repository.name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Docker Image**: \`${{ needs.get-image-info.outputs.docker_image }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **DockerHub User**: \`${{ needs.get-image-info.outputs.dockerhub_username }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit SHA**: \`${{ needs.get-image-info.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
@@ -184,7 +207,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
-          echo "- [DockerHub Repository](https://hub.docker.com/r/${{ needs.get-image-info.outputs.dockerhub_username }}/${{ needs.get-image-info.outputs.docker_image }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [GCP Artifact Registry](https://console.cloud.google.com/artifacts/docker/${{ needs.get-image-info.outputs.gcp_project_id }}/${{ needs.get-image-info.outputs.gcp_region }}/${{ needs.get-image-info.outputs.artifact_registry }})" >> $GITHUB_STEP_SUMMARY
           echo "- [Commit ${{ needs.get-image-info.outputs.short_sha }}](${{ github.event.head_commit.url }})" >> $GITHUB_STEP_SUMMARY
           echo "- [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -207,11 +230,14 @@ jobs:
       - name: 📊 Console Summary
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📊 KUBERNETES DEPLOYMENT SUMMARY"
+          echo "📊 KUBERNETES DEPLOYMENT SUMMARY (GCP)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           echo "🔀 Branch: ${{ github.ref_name }}"
           echo "📦 Project: ${{ github.event.repository.name }}"
+          echo "☁️  GCP Project: ${{ needs.get-image-info.outputs.gcp_project_id }}"
+          echo "📍 Region: ${{ needs.get-image-info.outputs.gcp_region }}"
+          echo "🗄️  Registry: ${{ needs.get-image-info.outputs.artifact_registry }}"
           echo "🐳 Docker Image: ${{ needs.get-image-info.outputs.docker_image }}"
           echo "🔗 Commit SHA: ${{ needs.get-image-info.outputs.short_sha }}"
           echo ""
