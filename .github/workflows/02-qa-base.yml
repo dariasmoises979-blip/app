@@ -38,7 +38,7 @@ jobs:
   # Deployment QA
   # ───────────────────────────────────────────────────────────
   deploy-qa:
-        name: 🚀 Deploy to STAGING
+        name: 🚀 Deploy to QAS
         needs: test
         uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
         with:
@@ -48,7 +48,7 @@ jobs:
           gcp_region: ${{ needs.get-image-info.outputs.gcp_region }}
           artifact_registry: ${{ needs.get-image-info.outputs.artifact_registry }}
           environment: qa
-          image_tag: ${{ needs.get-image-info.outputs.tag_staging }}
+          image_tag: ${{ needs.get-image-info.outputs.tag_qa }}
           target_branch: main
         secrets:
           GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
