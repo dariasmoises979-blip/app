@@ -1,14 +1,13 @@
 ########################################
 # 🚀 WORKFLOW: Deploy to Kubernetes
-# Descarga los tags generados por el build pipeline
-# y actualiza los manifiestos de Kubernetes y Helm
-# 04-deploy-kubernetes.yml v2.2 - FULLY FIXED
+# Se ejecuta SOLO cuando hay un PR de integration a main
+# 04-deploy-kubernetes.yml v3.0 - PR ONLY
 ########################################
 
 name: Deploy to Kubernetes
 
 on:
-  # Solo se ejecuta cuando hay PR o merge de integration a main
+  # Solo se ejecuta cuando hay PR de integration a main
   pull_request:
     branches:
       - main
@@ -16,10 +15,6 @@ on:
       - opened
       - synchronize
       - reopened
-  
-  push:
-    branches:
-      - main
 
 permissions:
   actions: read
@@ -28,14 +23,43 @@ permissions:
 
 jobs:
   # ═══════════════════════════════════════════════════════════
+  # JOB 0: VERIFICAR RAMA DE ORIGEN
+  # ═══════════════════════════════════════════════════════════
+  check-source:
+    name: 🔍 Verify Source Branch
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+    
+    steps:
+      - name: 🔍 Check if PR is from integration branch
+        id: check
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔍 CHECKING PR SOURCE BRANCH"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📌 PR from: ${{ github.event.pull_request.head.ref }}"
+          echo "📌 PR to: ${{ github.event.pull_request.base.ref }}"
+          echo "📌 PR number: #${{ github.event.pull_request.number }}"
+          echo ""
+          
+          if [ "${{ github.event.pull_request.head.ref }}" = "integration" ]; then
+            echo "✅ PR is from integration branch - Deployment will proceed"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "⏭️  PR is NOT from integration branch - Skipping deployment"
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+          fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # ═══════════════════════════════════════════════════════════
   # JOB 1: DESCARGAR INFORMACIÓN DE LAS IMÁGENES
   # ═══════════════════════════════════════════════════════════
   get-image-info:
     name: 📥 Get Image Info
+    needs: check-source
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'integration') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: needs.check-source.outputs.should_deploy == 'true'
     
     outputs:
       image_name: ${{ steps.load_info.outputs.image_name }}
@@ -63,6 +87,10 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📋 LOADING IMAGE INFORMATION"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔗 PR #${{ github.event.pull_request.number }}"
+          echo "🌿 Branch: ${{ github.event.pull_request.head.ref }}"
+          echo "📝 Commit: ${{ github.event.pull_request.head.sha }}"
+          echo ""
           
           if [ -f "image-info.env" ]; then
             echo "✅ Image info file found"
@@ -90,16 +118,19 @@ jobs:
             echo "✅ Image information loaded successfully"
           else
             echo "⚠️  Image info file not found"
-            echo "Using default values..."
+            echo "Using default values from PR commit..."
             
-            # Valores por defecto
+            # Valores por defecto basados en el commit del PR
+            SHORT_SHA="${{ github.event.pull_request.head.sha }}"
+            SHORT_SHA="${SHORT_SHA:0:7}"
+            
             echo "image_name=dariasmoises979/mi-aplicacion" >> $GITHUB_OUTPUT
             echo "dockerhub_username=dariasmoises979" >> $GITHUB_OUTPUT
             echo "docker_image=mi-aplicacion" >> $GITHUB_OUTPUT
-            echo "tag_pre=pre-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
-            echo "tag_staging=staging-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
-            echo "tag_pro=pro-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
-            echo "short_sha=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+            echo "tag_pre=pre-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "tag_staging=staging-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "tag_pro=pro-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
           fi
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -109,7 +140,6 @@ jobs:
   deploy-pre:
     name: 🚀 Deploy to PRE
     needs: get-image-info
-    if: success()
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       project_name: ${{ github.event.repository.name }}
@@ -127,7 +157,6 @@ jobs:
   deploy-staging:
     name: 🚀 Deploy to STAGING
     needs: [get-image-info, deploy-pre]
-    if: needs.deploy-pre.result == 'success'
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       project_name: ${{ github.event.repository.name }}
@@ -145,7 +174,6 @@ jobs:
   deploy-pro:
     name: 🚀 Deploy to PRO
     needs: [get-image-info, deploy-staging]
-    if: needs.deploy-staging.result == 'success'
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-gitops.yml@main
     with:
       project_name: ${{ github.event.repository.name }}
@@ -163,17 +191,25 @@ jobs:
   deployment-summary:
     name: 📊 Deployment Summary
     needs: 
+      - check-source
       - get-image-info
       - deploy-pre
       - deploy-staging
       - deploy-pro
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && needs.check-source.outputs.should_deploy == 'true'
     
     steps:
       - name: 📊 Generate deployment summary
         run: |
           echo "## 📊 Kubernetes Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🔀 Pull Request Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR**: #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **From**: \`${{ github.event.pull_request.head.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **To**: \`${{ github.event.pull_request.base.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.event.pull_request.head.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### 🐳 Docker Images" >> $GITHUB_STEP_SUMMARY
@@ -214,6 +250,7 @@ jobs:
           
           echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
           echo "- [DockerHub Repository](https://hub.docker.com/r/${{ needs.get-image-info.outputs.dockerhub_username }}/${{ needs.get-image-info.outputs.docker_image }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Pull Request #${{ github.event.pull_request.number }}](${{ github.event.pull_request.html_url }})" >> $GITHUB_STEP_SUMMARY
           echo "- [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
@@ -238,6 +275,7 @@ jobs:
           echo "📊 KUBERNETES DEPLOYMENT SUMMARY"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
+          echo "🔀 PR: #${{ github.event.pull_request.number }}"
           echo "📦 Project: ${{ github.event.repository.name }}"
           echo "🐳 Docker Image: ${{ needs.get-image-info.outputs.docker_image }}"
           echo "🔗 Commit SHA: ${{ needs.get-image-info.outputs.short_sha }}"
@@ -256,5 +294,3 @@ jobs:
           echo "🕐 Date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           echo "🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-
