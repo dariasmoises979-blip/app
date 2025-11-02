@@ -108,14 +108,16 @@ jobs:
     needs: build-image-pre
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/security.yml@main
     with:
-      image_name: "dariasmoises979/mi-aplicacion"
-      image_tag: "pre"
-      dockerhub_username: "dariasmoises979"
+      image_name: mi-aplicacion
+      image_tag: pre
+      gcp_project_id: elite-ceremony-476307-s9
+      gcp_region: us-central1
+      artifact_registry: dariasmoises979
       enable_sonar: true
       artifact_name: "security-reports-pre-${{ github.run_id }}"  # 🆕 NOMBRE ÚNICO
     secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
 
   # ──────────────────────────────────────────────────────────
   # Security Scan - Ambiente STAGING
