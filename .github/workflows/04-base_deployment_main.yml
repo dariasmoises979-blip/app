@@ -54,8 +54,7 @@ jobs:
     name: 📥 Get Image Info
     needs: check-source
     runs-on: ubuntu-latest
-    #if: needs.check-source.outputs.should_deploy == 'true'
-    
+        
     outputs:
       image_name: ${{ steps.load_info.outputs.image_name }}
       dockerhub_username: ${{ steps.load_info.outputs.dockerhub_username }}
@@ -192,7 +191,6 @@ jobs:
       - deploy-staging
       - deploy-pro
     runs-on: ubuntu-latest
-    #if: always() && needs.check-source.outputs.should_deploy == 'true'
     
     steps:
       - name: 📊 Generate deployment summary
