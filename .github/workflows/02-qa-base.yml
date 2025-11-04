@@ -11,12 +11,12 @@ on:
   push:
     branches:
       - qa
-  workflow_dispatch:  # ✅ Permite ejecución manual
+  workflow_dispatch:
 
-# ───────────────────────────────────────────────────────────
-# Job 1: Ejecutar tests 
-# ───────────────────────────────────────────────────────────
 jobs:
+  # ───────────────────────────────────────────────────────────
+  # Job 1: Ejecutar tests 
+  # ───────────────────────────────────────────────────────────
   test:
     name: Run Qa Tests
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/qa.yml@main
@@ -34,31 +34,83 @@ jobs:
         -Dsonar.coverage.exclusions=**/test/**,**/tests/**
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
   # ───────────────────────────────────────────────────────────
-  # Deployment QA
+  # Job 2: Capturar información de la imagen de QA
+  # ───────────────────────────────────────────────────────────
+  get-image-info:
+    name: 📦 Get QA Image Information
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      docker_image: ${{ steps.image-info.outputs.docker_image }}
+      gcp_project_id: ${{ steps.image-info.outputs.gcp_project_id }}
+      gcp_region: ${{ steps.image-info.outputs.gcp_region }}
+      artifact_registry: ${{ steps.image-info.outputs.artifact_registry }}
+      tag_qa: ${{ steps.image-info.outputs.tag_qa }}
+      full_image_url: ${{ steps.image-info.outputs.full_image_url }}
+    
+    steps:
+      - name: 📊 Extract and set image information
+        id: image-info
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 CAPTURING QA IMAGE INFORMATION"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Información de la imagen (debe coincidir con tu configuración de build)
+          DOCKER_IMAGE="mi-aplicacion"
+          GCP_PROJECT_ID="elite-ceremony-476307-s9"
+          GCP_REGION="us-central1"
+          ARTIFACT_REGISTRY="dariasmoises979"
+          
+          # Generar tag basado en el commit SHA (formato común)
+          TAG_QA="qa-${{ github.sha }}"
+          
+          # Construir URL completa de la imagen
+          FULL_IMAGE_URL="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE}:${TAG_QA}"
+          
+          echo "🐳 Docker Image: ${DOCKER_IMAGE}"
+          echo "☁️  GCP Project: ${GCP_PROJECT_ID}"
+          echo "📍 GCP Region: ${GCP_REGION}"
+          echo "📦 Artifact Registry: ${ARTIFACT_REGISTRY}"
+          echo "🏷️  Tag QA: ${TAG_QA}"
+          echo "🔗 Full Image URL: ${FULL_IMAGE_URL}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Exportar como outputs
+          echo "docker_image=${DOCKER_IMAGE}" >> $GITHUB_OUTPUT
+          echo "gcp_project_id=${GCP_PROJECT_ID}" >> $GITHUB_OUTPUT
+          echo "gcp_region=${GCP_REGION}" >> $GITHUB_OUTPUT
+          echo "artifact_registry=${ARTIFACT_REGISTRY}" >> $GITHUB_OUTPUT
+          echo "tag_qa=${TAG_QA}" >> $GITHUB_OUTPUT
+          echo "full_image_url=${FULL_IMAGE_URL}" >> $GITHUB_OUTPUT
+
+  # ───────────────────────────────────────────────────────────
+  # Job 3: Deployment QA
   # ───────────────────────────────────────────────────────────
   deploy-qa:
-        name: 🚀 Deploy to QAS
-        needs: test
-        uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
-        with:
-          project_name: ${{ github.event.repository.name }}
-          docker_image: ${{ needs.get-image-info.outputs.docker_image }}
-          gcp_project_id: ${{ needs.get-image-info.outputs.gcp_project_id }}
-          gcp_region: ${{ needs.get-image-info.outputs.gcp_region }}
-          artifact_registry: ${{ needs.get-image-info.outputs.artifact_registry }}
-          environment: qa
-          image_tag: ${{ needs.get-image-info.outputs.tag_qa }}
-          target_branch: main
-        secrets:
-          GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
-  
+    name: 🚀 Deploy to QA
+    needs: [test, get-image-info]
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
+    with:
+      project_name: ${{ github.event.repository.name }}
+      docker_image: ${{ needs.get-image-info.outputs.docker_image }}
+      gcp_project_id: ${{ needs.get-image-info.outputs.gcp_project_id }}
+      gcp_region: ${{ needs.get-image-info.outputs.gcp_region }}
+      artifact_registry: ${{ needs.get-image-info.outputs.artifact_registry }}
+      environment: qa
+      image_tag: ${{ needs.get-image-info.outputs.tag_qa }}
+      target_branch: main
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN2 }}
+
   # ───────────────────────────────────────────────────────────
-  # Job 3: Crear PR a Integration
+  # Job 4: Crear PR a Integration
   # ───────────────────────────────────────────────────────────
   create-pr-to-integration:
     name: Create PR to Integration
-    needs: test
+    needs: deploy-qa
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
     with:
       source_branch: 'qa'
@@ -68,7 +120,7 @@ jobs:
       labels: 'automated,deployment,integration,qa'
 
   # ───────────────────────────────────────────────────────────
-  # Job 4: Saludo Manual con Aprobación (SOLO MANUAL)
+  # Job 5: Saludo Manual con Aprobación (SOLO MANUAL)
   # ───────────────────────────────────────────────────────────
   saludar:
     runs-on: 'ubuntu-latest'
@@ -80,7 +132,7 @@ jobs:
           echo "¡Hola Mundo!"
 
   # ───────────────────────────────────────────────────────────
-  # Job 3.1: Saludo Manual con Aprobación (SOLO MANUAL)
+  # Job 6: Saludo Manual con Aprobación (SOLO MANUAL)
   # ───────────────────────────────────────────────────────────
   saludar-2:
     runs-on: 'ubuntu-latest'
@@ -89,6 +141,4 @@ jobs:
     steps:
       - name: Hola Mundo
         run: |
-          echo "¡Hola Mundo!"    
-
-          
+          echo "¡Hola Mundo!"
