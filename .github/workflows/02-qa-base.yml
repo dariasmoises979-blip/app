@@ -130,16 +130,34 @@ jobs:
           echo "🎯 Looking for tag with commit: ${FEATURE_COMMIT_SHORT}"
           echo ""
           
-          # Buscar la imagen con el tag que contiene el commit SHA
-          # El tag debe seguir el patrón usado en 01-feature-base.yml
-          # Ejemplo: qa-abc1234 o qa-environment-abc1234
+          # PASO 1: Listar TODAS las imágenes disponibles en el registry
+          echo "📋 Listing all available images in registry:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          gcloud artifacts docker images list \
+            ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY} \
+            --include-tags \
+            --format="table(package, version, tags)" \
+            --limit=20 2>/dev/null || echo "❌ Could not list images"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          
+          # PASO 2: Intentar listar tags de la imagen específica
+          echo "📋 Listing tags for ${DOCKER_IMAGE}:"
+          gcloud artifacts docker tags list \
+            ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE} \
+            --format="table(tag, version)" \
+            --limit=10 2>/dev/null || echo "⚠️  Image '${DOCKER_IMAGE}' not found or has no tags"
+          echo ""
+          
+          # PASO 3: Buscar la imagen con el tag que contiene el commit SHA
+          echo "🔍 Searching for tag containing commit SHA: ${FEATURE_COMMIT_SHORT}"
           IMAGE_TAG=$(gcloud artifacts docker tags list \
             ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE} \
             --format="value(tag)" \
             --filter="tag~${FEATURE_COMMIT_SHORT}" \
             --limit=1 2>/dev/null || echo "")
           
-          # Si no encuentra por commit SHA, buscar por patrón qa-
+          # PASO 4: Si no encuentra por commit SHA, buscar por patrón qa-
           if [ -z "${IMAGE_TAG}" ]; then
             echo "⚠️  No image found with commit SHA, searching for latest qa- tag..."
             IMAGE_TAG=$(gcloud artifacts docker tags list \
@@ -150,7 +168,7 @@ jobs:
               --limit=1 2>/dev/null || echo "")
           fi
           
-          # Si aún no encuentra, buscar la más reciente
+          # PASO 5: Si aún no encuentra, buscar la más reciente
           if [ -z "${IMAGE_TAG}" ]; then
             echo "⚠️  No qa- tag found, getting latest tag..."
             IMAGE_TAG=$(gcloud artifacts docker tags list \
@@ -160,17 +178,34 @@ jobs:
               --limit=1 2>/dev/null || echo "")
           fi
           
+          # PASO 6: Validar resultado
           if [ -z "${IMAGE_TAG}" ]; then
+            echo ""
             echo "❌ ERROR: No image found in Artifact Registry"
-            echo "   Make sure the image was built in the feature workflow"
+            echo ""
+            echo "🔍 DEBUG INFORMATION:"
             echo "   Expected image: ${DOCKER_IMAGE}"
             echo "   Expected registry: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}"
+            echo "   Feature commit: ${FEATURE_COMMIT_SHORT}"
+            echo ""
+            echo "💡 POSSIBLE CAUSES:"
+            echo "   1. Image name mismatch (check 01-feature-base.yml docker_image parameter)"
+            echo "   2. Image was not built successfully in feature workflow"
+            echo "   3. Image was built in a different registry"
+            echo "   4. Image was built with a different naming convention"
+            echo ""
+            echo "🔧 NEXT STEPS:"
+            echo "   1. Check the logs of 'build-image' job in the feature workflow"
+            echo "   2. Verify the image was pushed successfully"
+            echo "   3. Check GCP Console: https://console.cloud.google.com/artifacts"
+            echo ""
             exit 1
           fi
           
           # Construir URL completa
           FULL_IMAGE_URL="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE}:${IMAGE_TAG}"
           
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅ Image found:"
           echo "   🐳 Image: ${DOCKER_IMAGE}"
           echo "   🏷️  Tag: ${IMAGE_TAG}"
