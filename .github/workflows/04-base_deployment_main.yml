@@ -1,7 +1,7 @@
 ########################################
 # 🚀 WORKFLOW: Deploy to Kubernetes (GCP)
 # Se ejecuta cuando hay push a main
-# 04-deploy-kubernetes.yml v5.0 - GCP ARTIFACT REGISTRY
+# 04-deploy-kubernetes.yml v6.0 - USA IMAGE-INFO DEL BUILD
 ########################################
 
 name: Deploy to Kubernetes
@@ -18,10 +18,10 @@ permissions:
 
 jobs:
   # ═══════════════════════════════════════════════════════════
-  # JOB 1: OBTENER INFORMACIÓN DE LA IMAGEN
+  # JOB 1: OBTENER INFORMACIÓN DE LA IMAGEN DESDE ARTIFACT
   # ═══════════════════════════════════════════════════════════
   get-image-info:
-    name: 📥 Get Image Info
+    name: 📥 Get Image Info from Build Artifact
     runs-on: ubuntu-latest
     
     outputs:
@@ -34,39 +34,54 @@ jobs:
       tag_staging: ${{ steps.load_info.outputs.tag_staging }}
       tag_pro: ${{ steps.load_info.outputs.tag_pro }}
       short_sha: ${{ steps.load_info.outputs.short_sha }}
+      full_image_pre: ${{ steps.load_info.outputs.full_image_pre }}
+      full_image_staging: ${{ steps.load_info.outputs.full_image_staging }}
+      full_image_pro: ${{ steps.load_info.outputs.full_image_pro }}
     
     steps:
-      - name: 📋 Load image information
+      - name: 📥 Download image info artifact from workflow integration
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: 03-ci-cd.yml
+          branch: integration
+          name: image-info
+          path: .
+          workflow_conclusion: success
+          
+      - name: 📋 Load and validate image information
         id: load_info
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📋 LOADING IMAGE INFORMATION (GCP)"
+          echo "📋 LOADING IMAGE INFORMATION FROM BUILD (GCP)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🌿 Branch: ${{ github.ref_name }}"
-          echo "📝 Commit: ${{ github.sha }}"
+          echo "🌿 Deploy Branch: ${{ github.ref_name }}"
+          echo "📝 Deploy Commit: ${{ github.sha }}"
           echo ""
           
-          # Generar SHORT_SHA del commit actual
-          SHORT_SHA="${{ github.sha }}"
-          SHORT_SHA="${SHORT_SHA:0:7}"
+          # Verificar que existe el archivo
+          if [ ! -f "image-info.env" ]; then
+            echo "❌ ERROR: image-info.env not found!"
+            echo "   Make sure the build workflow (03-ci-cd.yml) completed successfully"
+            echo "   and uploaded the image-info artifact."
+            exit 1
+          fi
           
-          # Configuración de GCP Artifact Registry
-          GCP_PROJECT_ID="elite-ceremony-476307-s9"
-          GCP_REGION="us-central1"
-          ARTIFACT_REGISTRY="artifact_dariasmoises979"
-          DOCKER_IMAGE="mi-aplicacion"
+          echo "✅ image-info.env found, loading variables..."
+          echo ""
           
-          # Imagen completa en formato GCP
-          IMAGE_NAME="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE}"
+          # Cargar variables desde el archivo
+          source image-info.env
           
-          # Tags para cada entorno
-          TAG_PRE="pre-${SHORT_SHA}"
-          TAG_STAGING="staging-${SHORT_SHA}"
-          TAG_PRO="pro-${SHORT_SHA}"
+          # Validar variables críticas
+          if [ -z "$SHORT_SHA" ] || [ -z "$TAG_PRE" ] || [ -z "$TAG_STAGING" ] || [ -z "$TAG_PRO" ]; then
+            echo "❌ ERROR: Missing critical variables in image-info.env"
+            cat image-info.env
+            exit 1
+          fi
           
-          # Exportar outputs
-          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "docker_image=${DOCKER_IMAGE}" >> $GITHUB_OUTPUT
+          # Exportar outputs usando las variables del archivo de build
+          echo "image_name=${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "docker_image=${IMAGE_NAME}" >> $GITHUB_OUTPUT
           echo "gcp_project_id=${GCP_PROJECT_ID}" >> $GITHUB_OUTPUT
           echo "gcp_region=${GCP_REGION}" >> $GITHUB_OUTPUT
           echo "artifact_registry=${ARTIFACT_REGISTRY}" >> $GITHUB_OUTPUT
@@ -74,17 +89,29 @@ jobs:
           echo "tag_staging=${TAG_STAGING}" >> $GITHUB_OUTPUT
           echo "tag_pro=${TAG_PRO}" >> $GITHUB_OUTPUT
           echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "full_image_pre=${FULL_IMAGE_PRE}" >> $GITHUB_OUTPUT
+          echo "full_image_staging=${FULL_IMAGE_STAGING}" >> $GITHUB_OUTPUT
+          echo "full_image_pro=${FULL_IMAGE_PRO}" >> $GITHUB_OUTPUT
           
-          echo ""
-          echo "✅ Image information generated:"
+          echo "✅ Image information loaded from build:"
           echo "   • GCP Project: ${GCP_PROJECT_ID}"
           echo "   • Region: ${GCP_REGION}"
           echo "   • Registry: ${ARTIFACT_REGISTRY}"
-          echo "   • Image: ${IMAGE_NAME}"
-          echo "   • PRE tag: ${TAG_PRE}"
-          echo "   • STAGING tag: ${TAG_STAGING}"
-          echo "   • PRO tag: ${TAG_PRO}"
-          echo "   • SHA: ${SHORT_SHA}"
+          echo "   • Image Name: ${IMAGE_NAME}"
+          echo "   • Build SHA: ${SHORT_SHA} (from build workflow)"
+          echo "   • Build Commit: ${COMMIT_SHA}"
+          echo "   • Build Date: ${BUILD_DATE}"
+          echo "   • Triggered by: ${TRIGGERED_BY}"
+          echo ""
+          echo "🏷️  Tags from build:"
+          echo "   • PRE:     ${TAG_PRE}"
+          echo "   • STAGING: ${TAG_STAGING}"
+          echo "   • PRO:     ${TAG_PRO}"
+          echo ""
+          echo "📦 Full images:"
+          echo "   • PRE:     ${FULL_IMAGE_PRE}"
+          echo "   • STAGING: ${FULL_IMAGE_STAGING}"
+          echo "   • PRO:     ${FULL_IMAGE_PRO}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   # ═══════════════════════════════════════════════════════════
@@ -163,9 +190,10 @@ jobs:
           echo "## 📊 Kubernetes Deployment Summary (GCP)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "### 🔀 Push Info" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔀 Deployment Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deploy Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deploy Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build SHA Used**: \`${{ needs.get-image-info.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Message**: ${{ github.event.head_commit.message }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
@@ -176,7 +204,7 @@ jobs:
           echo "- **Base Image**: \`${{ needs.get-image-info.outputs.image_name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "### 🐳 Docker Images" >> $GITHUB_STEP_SUMMARY
+          echo "### 🐳 Docker Images Deployed" >> $GITHUB_STEP_SUMMARY
           echo "| Environment | Image Tag | Status | Files Updated |" >> $GITHUB_STEP_SUMMARY
           echo "|-------------|-----------|--------|---------------|" >> $GITHUB_STEP_SUMMARY
           
@@ -197,18 +225,24 @@ jobs:
           
           echo "" >> $GITHUB_STEP_SUMMARY
           
+          echo "### 📋 Full Images Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "- **PRE**: \`${{ needs.get-image-info.outputs.full_image_pre }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **STAGING**: \`${{ needs.get-image-info.outputs.full_image_staging }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **PRO**: \`${{ needs.get-image-info.outputs.full_image_pro }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
           echo "### 📋 Deployment Details" >> $GITHUB_STEP_SUMMARY
           echo "- **Project**: \`${{ github.event.repository.name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Docker Image**: \`${{ needs.get-image-info.outputs.docker_image }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit SHA**: \`${{ needs.get-image-info.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Triggered by**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Commit SHA**: \`${{ needs.get-image-info.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed by**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deploy Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
           echo "- [GCP Artifact Registry](https://console.cloud.google.com/artifacts/docker/${{ needs.get-image-info.outputs.gcp_project_id }}/${{ needs.get-image-info.outputs.gcp_region }}/${{ needs.get-image-info.outputs.artifact_registry }})" >> $GITHUB_STEP_SUMMARY
-          echo "- [Commit ${{ needs.get-image-info.outputs.short_sha }}](${{ github.event.head_commit.url }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Build Commit ${{ needs.get-image-info.outputs.short_sha }}](https://github.com/${{ github.repository }}/commit/${{ needs.get-image-info.outputs.short_sha }})" >> $GITHUB_STEP_SUMMARY
           echo "- [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
@@ -222,6 +256,8 @@ jobs:
             TOTAL_FILES=$((PRE_TOTAL + STG_TOTAL + PRO_TOTAL))
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Total files updated across all environments: ${TOTAL_FILES}**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎯 **All manifests are now using images built from commit \`${{ needs.get-image-info.outputs.short_sha }}\`**" >> $GITHUB_STEP_SUMMARY
           else
             echo "### ⚠️ Deployment Incomplete" >> $GITHUB_STEP_SUMMARY
             echo "Some environments failed or were skipped. Check the logs above." >> $GITHUB_STEP_SUMMARY
@@ -233,25 +269,27 @@ jobs:
           echo "📊 KUBERNETES DEPLOYMENT SUMMARY (GCP)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          echo "🔀 Branch: ${{ github.ref_name }}"
+          echo "🔀 Deploy Branch: ${{ github.ref_name }}"
+          echo "📝 Deploy Commit: ${{ github.sha }}"
+          echo "🏗️  Build SHA Used: ${{ needs.get-image-info.outputs.short_sha }}"
+          echo ""
           echo "📦 Project: ${{ github.event.repository.name }}"
           echo "☁️  GCP Project: ${{ needs.get-image-info.outputs.gcp_project_id }}"
           echo "📍 Region: ${{ needs.get-image-info.outputs.gcp_region }}"
           echo "🗄️  Registry: ${{ needs.get-image-info.outputs.artifact_registry }}"
           echo "🐳 Docker Image: ${{ needs.get-image-info.outputs.docker_image }}"
-          echo "🔗 Commit SHA: ${{ needs.get-image-info.outputs.short_sha }}"
           echo ""
           echo "📋 Deployment Status:"
           echo "   • PRE:     ${{ needs.deploy-pre.result }} (K8s: ${{ needs.deploy-pre.outputs.k8s_files_count || '0' }}, Helm: ${{ needs.deploy-pre.outputs.helm_files_count || '0' }})"
           echo "   • STAGING: ${{ needs.deploy-staging.result }} (K8s: ${{ needs.deploy-staging.outputs.k8s_files_count || '0' }}, Helm: ${{ needs.deploy-staging.outputs.helm_files_count || '0' }})"
           echo "   • PRO:     ${{ needs.deploy-pro.result }} (K8s: ${{ needs.deploy-pro.outputs.k8s_files_count || '0' }}, Helm: ${{ needs.deploy-pro.outputs.helm_files_count || '0' }})"
           echo ""
-          echo "🏷️  Tags Used:"
+          echo "🏷️  Tags Used (from build ${{ needs.get-image-info.outputs.short_sha }}):"
           echo "   • PRE:     ${{ needs.get-image-info.outputs.tag_pre }}"
           echo "   • STAGING: ${{ needs.get-image-info.outputs.tag_staging }}"
           echo "   • PRO:     ${{ needs.get-image-info.outputs.tag_pro }}"
           echo ""
-          echo "👤 Triggered by: ${{ github.actor }}"
+          echo "👤 Deployed by: ${{ github.actor }}"
           echo "🕐 Date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           echo "🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
