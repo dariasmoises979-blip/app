@@ -18,10 +18,10 @@ permissions:
 
 jobs:
   # ═══════════════════════════════════════════════════════════
-  # JOB 1: OBTENER INFORMACIÓN DE LA IMAGEN DESDE ARTIFACT
+  # JOB 1: OBTENER INFORMACIÓN DE LA IMAGEN DESDE EL REPO
   # ═══════════════════════════════════════════════════════════
   get-image-info:
-    name: 📥 Get Image Info from Build Artifact
+    name: 📥 Get Image Info from Repository
     runs-on: ubuntu-latest
     
     outputs:
@@ -39,30 +39,26 @@ jobs:
       full_image_pro: ${{ steps.load_info.outputs.full_image_pro }}
     
     steps:
-      - name: 📥 Download image info artifact from workflow integration
-        uses: dawidd6/action-download-artifact@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          workflow: 03-ci-cd.yml
-          branch: integration
-          name: image-info
-          path: .
-          workflow_conclusion: success
+          fetch-depth: 0
           
       - name: 📋 Load and validate image information
         id: load_info
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📋 LOADING IMAGE INFORMATION FROM BUILD (GCP)"
+          echo "📋 LOADING IMAGE INFORMATION FROM REPOSITORY (GCP)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🌿 Deploy Branch: ${{ github.ref_name }}"
           echo "📝 Deploy Commit: ${{ github.sha }}"
           echo ""
           
           # Verificar que existe el archivo
-          if [ ! -f "image-info.env" ]; then
-            echo "❌ ERROR: image-info.env not found!"
+          if [ ! -f ".github/build-info/image-info.env" ]; then
+            echo "❌ ERROR: .github/build-info/image-info.env not found!"
             echo "   Make sure the build workflow (03-ci-cd.yml) completed successfully"
-            echo "   and uploaded the image-info artifact."
+            echo "   and committed the image-info.env file."
             exit 1
           fi
           
@@ -70,12 +66,12 @@ jobs:
           echo ""
           
           # Cargar variables desde el archivo
-          source image-info.env
+          source .github/build-info/image-info.env
           
           # Validar variables críticas
           if [ -z "$SHORT_SHA" ] || [ -z "$TAG_PRE" ] || [ -z "$TAG_STAGING" ] || [ -z "$TAG_PRO" ]; then
             echo "❌ ERROR: Missing critical variables in image-info.env"
-            cat image-info.env
+            cat .github/build-info/image-info.env
             exit 1
           fi
           
@@ -93,7 +89,7 @@ jobs:
           echo "full_image_staging=${FULL_IMAGE_STAGING}" >> $GITHUB_OUTPUT
           echo "full_image_pro=${FULL_IMAGE_PRO}" >> $GITHUB_OUTPUT
           
-          echo "✅ Image information loaded from build:"
+          echo "✅ Image information loaded from repository:"
           echo "   • GCP Project: ${GCP_PROJECT_ID}"
           echo "   • Region: ${GCP_REGION}"
           echo "   • Registry: ${ARTIFACT_REGISTRY}"
