@@ -399,21 +399,32 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # ═══════════════════════════════════════════════════════════
-  # JOB 6: GUARDAR TAGS GENERADOS
+  # JOB 6: GUARDAR TAGS GENERADOS Y COMMITEAR AL REPO
   # ═══════════════════════════════════════════════════════════
   save-image-info:
     name: 💾 Save Image Tags
     runs-on: ubuntu-latest
     needs: [build-image-pre, build-image-staging, build-image-pro]
+    outputs:
+      short_sha: ${{ needs.build-image-pre.outputs.short_sha }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN2 }}
+          ref: integration  # Checkout de la rama integration
+
       - name: Create image info file
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "💾 SAVING IMAGE TAGS INFORMATION"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
+          # Crear directorio si no existe
+          mkdir -p .github/build-info
+          
           # Crear archivo con información de las imágenes para GCP Artifact Registry
-          cat > image-info.env << EOF
+          cat > .github/build-info/image-info.env << EOF
           GCP_PROJECT_ID=elite-ceremony-476307-s9
           GCP_REGION=us-central1
           ARTIFACT_REGISTRY=dariasmoises979
@@ -425,25 +436,40 @@ jobs:
           FULL_IMAGE_STAGING=${{ needs.build-image-staging.outputs.full_image }}
           FULL_IMAGE_PRO=${{ needs.build-image-pro.outputs.full_image }}
           SHORT_SHA=${{ needs.build-image-pre.outputs.short_sha }}
-          BUILD_DATE="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"  
+          BUILD_DATE="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           COMMIT_SHA=${{ github.sha }}
           TRIGGERED_BY=${{ github.actor }}
           WORKFLOW_RUN=${{ github.run_id }}
           BRANCH=${{ github.ref_name }}
           EOF
           
-          echo "✅ Image info file created"
+          echo "✅ Image info file created at: .github/build-info/image-info.env"
           echo ""
           echo "📋 Content:"
-          cat image-info.env
+          cat .github/build-info/image-info.env
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: Upload image info artifact
+      - name: Commit and push image info to integration
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          git add .github/build-info/image-info.env
+          
+          if git diff --staged --quiet; then
+            echo "ℹ️  No changes to commit (file already exists with same content)"
+          else
+            git commit -m "🏷️ Update image tags from build ${{ needs.build-image-pre.outputs.short_sha }} [skip ci]"
+            git push origin integration
+            echo "✅ Image info committed and pushed to integration branch"
+          fi
+
+      - name: Upload image info artifact (backup)
         uses: actions/upload-artifact@v4
         with:
           name: image-info
-          path: image-info.env
-          retention-days: 3
+          path: .github/build-info/image-info.env
+          retention-days: 30
           overwrite: true
 
   # ═══════════════════════════════════════════════════════════
@@ -533,3 +559,4 @@ jobs:
       pr_title: '🚀 Deploy integration to main'
       environment: 'integration'
       labels: 'automated,deployment,main,integration'
+    
