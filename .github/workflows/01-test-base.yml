@@ -1,12 +1,21 @@
-name: Run Unit Tests and Merge to Dev
+# 01-feature-workflow.yml
+name: Feature Pipeline - Tests & Merge to Dev
 
 on:
   push:
     branches: 
       - feature/**
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
+  # ═══════════════════════════════════════════════════════════
+  # STAGE 1: UNIT & INTEGRATION TESTS
+  # ═══════════════════════════════════════════════════════════
   test:
+    name: 🧪 Run Tests & Quality Analysis
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
     with:
       external_repo: dariasmoises979-blip/app
@@ -26,47 +35,173 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
 
+  # ═══════════════════════════════════════════════════════════
+  # STAGE 2: SQL QUERY ANALYSIS
+  # ═══════════════════════════════════════════════════════════
   analyze-queries:
-    name: Analyze Database and App Queries
+    name: 🔍 Analyze Database Queries
     runs-on: ubuntu-latest
     steps:
-      - name: 📦 Checkout del código
+      - name: 📦 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🧰 Configurar entorno de análisis
-        run: |
-          echo "Instalando herramientas necesarias para el análisis de queries..."
-          sudo apt-get update -y
-          sudo apt-get install -y jq python3 python3-pip
-          echo "✅ Entorno preparado correctamente."
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-      - name: 🧮 Escanear consultas SQL en el proyecto
+      - name: 🧰 Install SQL analysis tools
         run: |
-          echo "🔍 Buscando consultas SQL en el código..."
-          grep -R "SELECT" . || echo "No se encontraron consultas SQL directas."
-          echo "✅ Escaneo de queries completado."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🧰 INSTALLING SQL ANALYSIS TOOLS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          pip install --upgrade pip
+          pip install sqlfluff sqlparse
+          
+          echo "✅ Tools installed successfully"
+          echo "   - sqlfluff: SQL linter"
+          echo "   - sqlparse: SQL formatter & parser"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: 📊 Evaluar eficiencia de las consultas
+      - name: 🔍 Scan for SQL queries
+        id: scan
         run: |
-          echo "Analizando patrones de rendimiento..."
-          echo "⚙️ Detectando posibles N+1 queries, JOINs innecesarios o sin índices."
-          sleep 2
-          echo "✅ Análisis de rendimiento completado."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔍 SCANNING PROJECT FOR SQL QUERIES"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Buscar archivos con queries SQL
+          SQL_FILES=$(find . -type f \( -name "*.sql" -o -name "*.py" -o -name "*.js" -o -name "*.java" \) | grep -v node_modules | grep -v .git || echo "")
+          
+          if [ -z "${SQL_FILES}" ]; then
+            echo "⚠️  No SQL files found"
+            echo "query_count=0" >> $GITHUB_OUTPUT
+          else
+            QUERY_COUNT=$(echo "${SQL_FILES}" | wc -l)
+            echo "✅ Found ${QUERY_COUNT} files to analyze"
+            echo "${SQL_FILES}" | head -10
+            echo "query_count=${QUERY_COUNT}" >> $GITHUB_OUTPUT
+          fi
+          
+          # Buscar patrones SQL en el código
+          echo ""
+          echo "📊 SQL Pattern Analysis:"
+          SELECT_COUNT=$(grep -ri "SELECT\s" . --include="*.py" --include="*.sql" --include="*.js" 2>/dev/null | wc -l || echo "0")
+          INSERT_COUNT=$(grep -ri "INSERT\s" . --include="*.py" --include="*.sql" --include="*.js" 2>/dev/null | wc -l || echo "0")
+          UPDATE_COUNT=$(grep -ri "UPDATE\s" . --include="*.py" --include="*.sql" --include="*.js" 2>/dev/null | wc -l || echo "0")
+          DELETE_COUNT=$(grep -ri "DELETE\s" . --include="*.py" --include="*.sql" --include="*.js" 2>/dev/null | wc -l || echo "0")
+          JOIN_COUNT=$(grep -ri "JOIN\s" . --include="*.py" --include="*.sql" --include="*.js" 2>/dev/null | wc -l || echo "0")
+          
+          echo "   SELECT queries: ${SELECT_COUNT}"
+          echo "   INSERT queries: ${INSERT_COUNT}"
+          echo "   UPDATE queries: ${UPDATE_COUNT}"
+          echo "   DELETE queries: ${DELETE_COUNT}"
+          echo "   JOIN operations: ${JOIN_COUNT}"
+          
+          echo "select_count=${SELECT_COUNT}" >> $GITHUB_OUTPUT
+          echo "insert_count=${INSERT_COUNT}" >> $GITHUB_OUTPUT
+          echo "update_count=${UPDATE_COUNT}" >> $GITHUB_OUTPUT
+          echo "delete_count=${DELETE_COUNT}" >> $GITHUB_OUTPUT
+          echo "join_count=${JOIN_COUNT}" >> $GITHUB_OUTPUT
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: 🧾 Generar resumen del análisis
+      - name: 🧪 Lint SQL files with SQLFluff
+        if: steps.scan.outputs.query_count != '0'
+        continue-on-error: true
         run: |
-          echo "-----------------------------------------"
-          echo "📋 RESUMEN DEL ANÁLISIS DE QUERIES"
-          echo "-----------------------------------------"
-          echo "• Consultas analizadas: 25"
-          echo "• Posibles optimizaciones detectadas: 3"
-          echo "• Tiempo estimado de ejecución promedio: 120 ms"
-          echo "-----------------------------------------"
-          echo "✅ Análisis de queries completado exitosamente."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🧪 RUNNING SQLFLUFF LINTER"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Configurar SQLFluff
+          cat > .sqlfluff << EOF
+          [sqlfluff]
+          dialect = postgres
+          templater = raw
+          max_line_length = 120
+          
+          [sqlfluff:rules]
+          capitalisation_policy = upper
+          EOF
+          
+          # Ejecutar linter en archivos .sql
+          if ls *.sql 1> /dev/null 2>&1; then
+            sqlfluff lint . --dialect postgres || echo "⚠️  Linting issues found (non-blocking)"
+          else
+            echo "ℹ️  No .sql files to lint"
+          fi
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+      - name: 🔎 Detect potential performance issues
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔎 DETECTING PERFORMANCE ANTI-PATTERNS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          ISSUES_FOUND=0
+          
+          # Detectar SELECT *
+          SELECT_STAR=$(grep -ri "SELECT\s*\*" . --include="*.py" --include="*.sql" --include="*.js" 2>/dev/null | wc -l || echo "0")
+          if [ "${SELECT_STAR}" -gt 0 ]; then
+            echo "⚠️  Found ${SELECT_STAR} instances of 'SELECT *' (consider specifying columns)"
+            ISSUES_FOUND=$((ISSUES_FOUND + SELECT_STAR))
+          fi
+          
+          # Detectar N+1 patterns (queries en loops)
+          N_PLUS_ONE=$(grep -riE "(for|while).*\.(query|execute|get)" . --include="*.py" 2>/dev/null | wc -l || echo "0")
+          if [ "${N_PLUS_ONE}" -gt 0 ]; then
+            echo "⚠️  Found ${N_PLUS_ONE} potential N+1 query patterns (queries in loops)"
+            ISSUES_FOUND=$((ISSUES_FOUND + N_PLUS_ONE))
+          fi
+          
+          # Detectar missing WHERE clauses
+          NO_WHERE=$(grep -ri "DELETE FROM\|UPDATE" . --include="*.sql" --include="*.py" | grep -v "WHERE" 2>/dev/null | wc -l || echo "0")
+          if [ "${NO_WHERE}" -gt 0 ]; then
+            echo "⚠️  Found ${NO_WHERE} UPDATE/DELETE without WHERE clause (potential data loss risk)"
+            ISSUES_FOUND=$((ISSUES_FOUND + NO_WHERE))
+          fi
+          
+          # Detectar subconsultas sin límite
+          UNLIMITED_SUBQUERIES=$(grep -ri "SELECT.*\(SELECT" . --include="*.sql" | grep -v "LIMIT" 2>/dev/null | wc -l || echo "0")
+          if [ "${UNLIMITED_SUBQUERIES}" -gt 0 ]; then
+            echo "⚠️  Found ${UNLIMITED_SUBQUERIES} subqueries without LIMIT"
+            ISSUES_FOUND=$((ISSUES_FOUND + UNLIMITED_SUBQUERIES))
+          fi
+          
+          if [ "${ISSUES_FOUND}" -eq 0 ]; then
+            echo "✅ No obvious performance anti-patterns detected"
+          else
+            echo ""
+            echo "📊 Total potential issues: ${ISSUES_FOUND}"
+            echo "💡 Consider reviewing these patterns for optimization"
+          fi
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: 📊 Generate SQL analysis summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 SQL QUERY ANALYSIS SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Files analyzed: ${{ steps.scan.outputs.query_count }}"
+          echo "SELECT queries: ${{ steps.scan.outputs.select_count }}"
+          echo "INSERT queries: ${{ steps.scan.outputs.insert_count }}"
+          echo "UPDATE queries: ${{ steps.scan.outputs.update_count }}"
+          echo "DELETE queries: ${{ steps.scan.outputs.delete_count }}"
+          echo "JOIN operations: ${{ steps.scan.outputs.join_count }}"
+          echo ""
+          echo "✅ SQL analysis completed successfully"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # ═══════════════════════════════════════════════════════════
+  # STAGE 3: AUTO-MERGE TO DEV
+  # ═══════════════════════════════════════════════════════════
   merge-to-dev:
-    name: Merge to Dev
-    needs: test
+    name: 🔀 Auto-merge to Dev
+    needs: [test, analyze-queries]
     if: startsWith(github.ref_name, 'feature/') && success()
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main
     with:
@@ -75,114 +210,214 @@ jobs:
       use_fast_forward: false
       merge_message: '🔀 Auto-merge from ${{ github.ref_name }} after successful tests'
 
-  create-pr-to-integration:
-    name: Create PR to Integration
+  # ═══════════════════════════════════════════════════════════
+  # STAGE 4: CREATE PULL REQUEST TO QA
+  # ═══════════════════════════════════════════════════════════
+  create-pr-to-qa:
+    name: 📝 Create PR from Dev to QA
     needs: merge-to-dev
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
     with:
       source_branch: 'dev'
       target_branch: 'qa'
-      pr_title: '🚀 Deploy DEV to QA'
+      pr_title: '🚀 Deploy DEV to QA Environment'
       environment: 'qa'
       labels: 'automated,deployment,qa,dev'
 
- 
-  # ───────────────────────────────────────────────────────────
-  # Job FINAL: Resumen completo del workflow
-  # ───────────────────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════
+  # STAGE 5: NOTIFICATION & CONFIRMATION
+  # ═══════════════════════════════════════════════════════════
+  notify-success:
+    name: 🎉 Workflow Success Notification
+    needs: [test, analyze-queries, merge-to-dev, create-pr-to-qa]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: 🎊 Success notification
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🎉 FEATURE WORKFLOW COMPLETED SUCCESSFULLY!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "✅ Feature branch: ${{ github.ref_name }}"
+          echo "✅ Tests: PASSED"
+          echo "✅ SQL Analysis: COMPLETED"
+          echo "✅ Merged to: dev"
+          echo "✅ PR Created: dev → qa"
+          echo ""
+          echo "🔗 Workflow URL:"
+          echo "   ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo ""
+          echo "📝 Next Steps:"
+          echo "   1. Review the PR created from dev to qa"
+          echo "   2. Once approved, merge the PR to trigger QA deployment"
+          echo "   3. QA workflow will build Docker image and deploy"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: 📊 Generate metrics
+        run: |
+          echo "📊 Generating workflow metrics..."
+          
+          FEATURE_BRANCH="${{ github.ref_name }}"
+          COMMIT_SHA="${{ github.sha }}"
+          ACTOR="${{ github.actor }}"
+          TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          
+          echo ""
+          echo "📈 Workflow Metrics:"
+          echo "   Branch: ${FEATURE_BRANCH}"
+          echo "   Commit: ${COMMIT_SHA:0:8}"
+          echo "   Author: ${ACTOR}"
+          echo "   Timestamp: ${TIMESTAMP}"
+          echo "   Repository: ${{ github.repository }}"
+          echo ""
+          echo "✅ Metrics collected successfully"
+
+  # ═══════════════════════════════════════════════════════════
+  # STAGE 6: COMPREHENSIVE WORKFLOW SUMMARY
+  # ═══════════════════════════════════════════════════════════
   workflow-summary:
     name: 📊 Workflow Summary
-    needs: [test, analyze-queries, merge-to-dev]
+    needs: [test, analyze-queries, merge-to-dev, create-pr-to-qa, notify-success]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Generate Workflow Summary
+      - name: 📊 Generate comprehensive summary
         run: |
-          echo "# 🚀 Feature Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "# 🚀 Feature Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📊 Workflow Execution Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Status de cada job
-          echo "| Job | Status | Details |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🧪 Tests | ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }} | Unit & Integration Tests |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔍 Query Analysis | ${{ needs.analyze-queries.result == 'success' && '✅ Completed' || '❌ Failed' }} | SQL Performance Analysis |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔀 Merge to Dev | ${{ needs.merge-to-dev.result == 'success' && '✅ Merged' || '❌ Failed' }} | Feature → Dev |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📝 Create PR | ${{ needs.create-pr-to-integration.result == 'success' && '✅ Created' || '❌ Failed' }} | Dev → QA |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🐳 Build Image | ${{ needs.build-image.result == 'success' && '✅ Built' || '❌ Failed' }} | Docker Image |" >> $GITHUB_STEP_SUMMARY
-          echo "| 💾 Save Info | ${{ needs.save-image-info.result == 'success' && '✅ Saved' || '❌ Failed' }} | Image Metadata |" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow Run:** [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Feature Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Información de la imagen construida
-          if [[ "${{ needs.build-image.result }}" == "success" ]]; then
-            echo "## 🐳 Docker Image Information" >> $GITHUB_STEP_SUMMARY
+          # Pipeline stages status
+          echo "## 📊 Pipeline Stages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Job | Status | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-----|--------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **1️⃣ Testing** | Unit & Integration Tests | ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }} | SonarQube + Test Suite |" >> $GITHUB_STEP_SUMMARY
+          echo "| **2️⃣ Analysis** | SQL Query Analysis | ${{ needs.analyze-queries.result == 'success' && '✅ Completed' || '❌ Failed' }} | SQLFluff + Performance Check |" >> $GITHUB_STEP_SUMMARY
+          echo "| **3️⃣ Merge** | Auto-merge to Dev | ${{ needs.merge-to-dev.result == 'success' && '✅ Merged' || needs.merge-to-dev.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | \`${{ github.ref_name }}\` → \`dev\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **4️⃣ PR Creation** | Dev → QA PR | ${{ needs.create-pr-to-qa.result == 'success' && '✅ Created' || needs.create-pr-to-qa.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | Automated PR |" >> $GITHUB_STEP_SUMMARY
+          echo "| **5️⃣ Notification** | Success Alert | ${{ needs.notify-success.result == 'success' && '✅ Sent' || needs.notify-success.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | Workflow completion |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # SQL Analysis Summary (si está disponible)
+          echo "## 🔍 SQL Query Analysis Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.analyze-queries.result }}" == "success" ]]; then
+            echo "✅ **Analysis Completed Successfully**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-            echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| **Image Name** | \`mi-aplicacion\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Primary Tag** | \`${{ needs.build-image.outputs.image_tag }}\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Full Image** | \`${{ needs.build-image.outputs.full_image }}\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Commit SHA** | \`${{ needs.build-image.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **All Tags** | \`${{ needs.build-image.outputs.all_tags }}\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Environment** | \`qa\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Registry** | \`us-central1-docker.pkg.dev/elite-ceremony-476307-s9/dariasmoises979\` |" >> $GITHUB_STEP_SUMMARY
+            echo "The following checks were performed:" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔍 SQL file scanning" >> $GITHUB_STEP_SUMMARY
+            echo "- 🧪 SQLFluff linting" >> $GITHUB_STEP_SUMMARY
+            echo "- ⚠️  Performance anti-pattern detection" >> $GITHUB_STEP_SUMMARY
+            echo "- 📊 Query type analysis (SELECT, INSERT, UPDATE, DELETE)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            
-            echo "### 🔗 Quick Access" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- [View in GCP Console](https://console.cloud.google.com/artifacts/docker/elite-ceremony-476307-s9/us-central1/dariasmoises979/mi-aplicacion)" >> $GITHUB_STEP_SUMMARY
-            echo "- Workflow Run: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            
-            echo "### 📦 Pull Commands" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo '```bash' >> $GITHUB_STEP_SUMMARY
-            echo "# Configure Docker for GCP" >> $GITHUB_STEP_SUMMARY
-            echo "gcloud auth configure-docker us-central1-docker.pkg.dev" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "# Pull the image" >> $GITHUB_STEP_SUMMARY
-            echo "docker pull ${{ needs.build-image.outputs.full_image }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Review the job logs for detailed findings." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️  SQL analysis failed or was skipped" >> $GITHUB_STEP_SUMMARY
           fi
-          
-          # Metadata del workflow
-          echo "## 📋 Workflow Metadata" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Source Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Triggered By** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Timestamp** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Repository** | ${{ github.repository }} |" >> $GITHUB_STEP_SUMMARY
+          
+          # Git flow diagram
+          echo "## 🌿 Git Flow Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`mermaid" >> $GITHUB_STEP_SUMMARY
+          echo "graph LR" >> $GITHUB_STEP_SUMMARY
+          echo "    A[${{ github.ref_name }}] -->|✅ merged| B[dev]" >> $GITHUB_STEP_SUMMARY
+          echo "    B -->|📝 PR created| C[qa]" >> $GITHUB_STEP_SUMMARY
+          echo "    C -->|⏳ pending merge| D[integration]" >> $GITHUB_STEP_SUMMARY
+          echo "    style A fill:#90EE90" >> $GITHUB_STEP_SUMMARY
+          echo "    style B fill:#87CEEB" >> $GITHUB_STEP_SUMMARY
+          echo "    style C fill:#FFD700" >> $GITHUB_STEP_SUMMARY
+          echo "    style D fill:#D3D3D3" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Next steps
           echo "## 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ needs.build-image.result }}" == "success" ]]; then
-            echo "1. ✅ **Image Ready**: The Docker image has been built and pushed to GCP Artifact Registry" >> $GITHUB_STEP_SUMMARY
-            echo "2. 📝 **PR Created**: A pull request from \`dev\` to \`qa\` has been created" >> $GITHUB_STEP_SUMMARY
-            echo "3. 💾 **Info Saved**: Image metadata saved to \`.github/deployment-info/qa-image-info.json\`" >> $GITHUB_STEP_SUMMARY
-            echo "4. 🚀 **Ready for QA**: Once the PR is merged, QA workflow will automatically deploy using tag \`${{ needs.build-image.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ **Action Required**: Some jobs failed. Please check the logs above." >> $GITHUB_STEP_SUMMARY
+          
+          OVERALL_SUCCESS="true"
+          if [[ "${{ needs.test.result }}" != "success" ]] || \
+             [[ "${{ needs.analyze-queries.result }}" != "success" ]] || \
+             [[ "${{ needs.merge-to-dev.result }}" != "success" ]]; then
+            OVERALL_SUCCESS="false"
           fi
+          
+          if [[ "${OVERALL_SUCCESS}" == "true" ]]; then
+            echo "### ✅ All Stages Completed Successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "1. ✅ **Tests Passed**: All unit and integration tests passed" >> $GITHUB_STEP_SUMMARY
+            echo "2. ✅ **Code Quality**: SonarQube analysis completed" >> $GITHUB_STEP_SUMMARY
+            echo "3. ✅ **SQL Validated**: Query analysis completed with recommendations" >> $GITHUB_STEP_SUMMARY
+            echo "4. ✅ **Merged to Dev**: Changes merged to \`dev\` branch" >> $GITHUB_STEP_SUMMARY
+            echo "5. 📝 **PR Created**: Pull request from \`dev\` to \`qa\` is ready" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**What's Next:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Review the PR: [Dev → QA](${{ github.server_url }}/${{ github.repository }}/pulls)" >> $GITHUB_STEP_SUMMARY
+            echo "- Once approved and merged, the QA workflow will:" >> $GITHUB_STEP_SUMMARY
+            echo "  - Build Docker image" >> $GITHUB_STEP_SUMMARY
+            echo "  - Deploy to QA environment" >> $GITHUB_STEP_SUMMARY
+            echo "  - Run smoke tests" >> $GITHUB_STEP_SUMMARY
+            echo "  - Create PR to integration" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Pipeline Issues Detected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Failed Stages:**" >> $GITHUB_STEP_SUMMARY
+            
+            if [[ "${{ needs.test.result }}" != "success" ]]; then
+              echo "- ❌ **Tests**: Review test failures and fix issues" >> $GITHUB_STEP_SUMMARY
+            fi
+            if [[ "${{ needs.analyze-queries.result }}" != "success" ]]; then
+              echo "- ❌ **SQL Analysis**: Check SQL query issues" >> $GITHUB_STEP_SUMMARY
+            fi
+            if [[ "${{ needs.merge-to-dev.result }}" == "failure" ]]; then
+              echo "- ❌ **Merge**: Resolve merge conflicts or check permissions" >> $GITHUB_STEP_SUMMARY
+            fi
+            if [[ "${{ needs.create-pr-to-qa.result }}" == "failure" ]]; then
+              echo "- ❌ **PR Creation**: Verify PR workflow configuration" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Action Required:**" >> $GITHUB_STEP_SUMMARY
+            echo "1. Review failed job logs above" >> $GITHUB_STEP_SUMMARY
+            echo "2. Fix identified issues in your feature branch" >> $GITHUB_STEP_SUMMARY
+            echo "3. Push fixes to trigger workflow again" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Metadata
+          echo "## 📋 Workflow Metadata" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Repository** | ${{ github.repository }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Feature Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit SHA** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Author** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Workflow Run** | [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Execution Time** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Links útiles
+          echo "## 🔗 Useful Links" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 [SonarQube Dashboard](https://sonarcloud.io/project/overview?id=dariasmoises979-blip_app)" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔀 [Pull Requests](${{ github.server_url }}/${{ github.repository }}/pulls)" >> $GITHUB_STEP_SUMMARY
+          echo "- 🌿 [Dev Branch](${{ github.server_url }}/${{ github.repository }}/tree/dev)" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 [QA Branch](${{ github.server_url }}/${{ github.repository }}/tree/qa)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "_Generated by Feature Workflow - $(date -u +'%Y-%m-%d %H:%M:%S UTC')_" >> $GITHUB_STEP_SUMMARY
-
-  say-hello:
-    name: Confirmación de modificación independiente
-    needs: create-pr-to-integration
-    if: success()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Mensaje final
-        run: |
-          echo "✅ Se demuestra que se puede modificar el workflow por proyecto sin afectar a otros proyectos."
-          echo "🐳 Image built: ${{ needs.build-image.outputs.full_image }}"
-          echo "🏷️  Tag: ${{ needs.build-image.outputs.image_tag }}"
+          echo "_Generated by Feature Pipeline - $(date -u +'%Y-%m-%dT%H:%M:%SZ')_" >> $GITHUB_STEP_SUMMARY
