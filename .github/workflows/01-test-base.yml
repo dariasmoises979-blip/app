@@ -130,7 +130,84 @@ jobs:
       #DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+  # ───────────────────────────────────────────────────────────
+  # Job NUEVO: Guardar información de la imagen usando los outputs de build-image
+  # ───────────────────────────────────────────────────────────
+  save-image-info:
+    name: 💾 Save Image Info to Repository
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📦 Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN2 }}
+          ref: main
 
+      - name: 📝 Create image info file
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "💾 SAVING IMAGE INFORMATION FROM BUILD OUTPUT"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Crear directorio si no existe
+          mkdir -p .github/deployment-info
+          
+          # USAR LOS OUTPUTS DEL JOB build-image
+          IMAGE_TAG="${{ needs.build-image.outputs.image_tag }}"
+          FULL_IMAGE="${{ needs.build-image.outputs.full_image }}"
+          SHORT_SHA="${{ needs.build-image.outputs.short_sha }}"
+          ALL_TAGS="${{ needs.build-image.outputs.all_tags }}"
+          
+          # Crear archivo JSON con la información REAL del build
+          cat > .github/deployment-info/qa-image-info.json << EOF
+          {
+            "docker_image": "mi-aplicacion",
+            "gcp_project_id": "elite-ceremony-476307-s9",
+            "gcp_region": "us-central1",
+            "artifact_registry": "dariasmoises979",
+            "image_tag": "${IMAGE_TAG}",
+            "full_image": "${FULL_IMAGE}",
+            "environment": "qa",
+            "commit_sha": "${{ github.sha }}",
+            "commit_sha_short": "${SHORT_SHA}",
+            "all_tags": "${ALL_TAGS}",
+            "build_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "source_branch": "${{ github.ref_name }}",
+            "triggered_by": "${{ github.actor }}",
+            "workflow_run_id": "${{ github.run_id }}"
+          }
+          EOF
+          
+          echo "✅ Image info file created with REAL build outputs:"
+          cat .github/deployment-info/qa-image-info.json | jq '.'
+          echo ""
+          echo "📊 Summary:"
+          echo "   Primary Tag: ${IMAGE_TAG}"
+          echo "   Full Image: ${FULL_IMAGE}"
+          echo "   Short SHA: ${SHORT_SHA}"
+          echo "   All Tags: ${ALL_TAGS}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: 💾 Commit and push image info
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add .github/deployment-info/qa-image-info.json
+          
+          if git diff --staged --quiet; then
+            echo "⏭️  No changes to commit"
+          else
+            git commit -m "🐳 Update QA image info - ${{ needs.build-image.outputs.image_tag }}" \
+              -m "Image: ${{ needs.build-image.outputs.full_image }}" \
+              -m "Source: ${{ github.ref_name }}" \
+              -m "Commit: ${{ needs.build-image.outputs.short_sha }}" \
+              -m "Triggered by: ${{ github.actor }}"
+            
+            git push origin main
+            echo "✅ Image info pushed successfully"
+          fi
  #############################################################################
  # ───────────────────────────────────────────────────────────
   # Job 5: Mensaje de confirmación
