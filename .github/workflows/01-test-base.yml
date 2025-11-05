@@ -161,25 +161,9 @@ jobs:
     with:
       source_branch: 'dev'
       target_branch: 'qa'
-      pr_title: '🚀 Deploy DEV to QA - SHA: ${{ github.sha }}'
+      pr_title: '🚀 Deploy DEV to QA - Image: ${{ needs.build-image.outputs.image_tag }}'
       environment: 'qa'
       labels: 'automated,deployment,qa,dev'
-      pr_body: |
-        ## 🚀 Deployment Information
-        
-        **Source Branch:** `${{ github.ref_name }}`
-        **Commit SHA:** `${{ github.sha }}`
-        **Build Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-        
-        ### 🐳 Docker Image
-        - **Image:** `${{ needs.build-image.outputs.full_image }}`
-        - **Tag:** `${{ needs.build-image.outputs.image_tag }}`
-        
-        ### 🔑 Cache Information
-        To retrieve image info in QA workflow, use:
-        ```
-        cache_key: image-info-${{ github.sha }}-${{ github.run_id }}
-        ```
 
   # ───────────────────────────────────────────────────────────
   # Job FINAL: Resumen completo del workflow
