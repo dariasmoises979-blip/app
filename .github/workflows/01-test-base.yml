@@ -191,9 +191,9 @@ jobs:
   # ───────────────────────────────────────────────────────────
   # Job NUEVO: Copiar archivo a main después del merge a dev
   # ───────────────────────────────────────────────────────────
-  copy-to-main:
+  copy-to-branch:
     name: 📤 Copy Image Info to Main
-    needs: [merge-to-dev, save-image-info]
+    needs: save-image-info
     runs-on: ubuntu-latest
     steps:
       - name: 📦 Checkout dev branch
@@ -353,7 +353,7 @@ jobs:
 
   say-hello:
     name: Confirmación de modificación independiente
-    needs: [save-image-info]
+    needs: create-pr-to-integration
     if: success()
     runs-on: ubuntu-latest
     steps:
