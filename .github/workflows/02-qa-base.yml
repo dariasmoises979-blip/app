@@ -13,11 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: 'Commit SHA from feature workflow'
-        required: false
-        type: string
-      run_id:
-        description: 'Run ID from feature workflow'
+        description: 'Commit SHA from feature workflow (optional - auto-detected if empty)'
         required: false
         type: string
 
@@ -44,10 +40,10 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # ───────────────────────────────────────────────────────────
-  # Job 2: Leer información de la imagen desde CACHE
+  # Job 2: Leer información de la imagen desde ARTIFACT
   # ───────────────────────────────────────────────────────────
   get-image-info:
-    name: 📦 Get Image Info from Cache
+    name: 📦 Get Image Info from Artifact
     runs-on: ubuntu-latest
     needs: test
     outputs:
@@ -65,111 +61,165 @@ jobs:
       - name: 📦 Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 10  # Traer más commits para buscar el SHA correcto
+          fetch-depth: 20  # Traer suficientes commits para buscar el merge
 
-      - name: 🔍 Find commit SHA and run ID
+      - name: 🔍 Find source commit SHA
         id: find-sha
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🔍 SEARCHING FOR FEATURE WORKFLOW INFORMATION"
+          echo "🔍 SEARCHING FOR SOURCE COMMIT SHA"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          # Si se proporcionaron manualmente, usarlos
-          if [[ -n "${{ inputs.commit_sha }}" ]] && [[ -n "${{ inputs.run_id }}" ]]; then
-            COMMIT_SHA="${{ inputs.commit_sha }}"
-            RUN_ID="${{ inputs.run_id }}"
-            echo "✅ Using manually provided values:"
-            echo "   Commit SHA: ${COMMIT_SHA}"
-            echo "   Run ID: ${RUN_ID}"
+          # Si se proporcionó manualmente, usarlo
+          if [[ -n "${{ inputs.commit_sha }}" ]]; then
+            SOURCE_SHA="${{ inputs.commit_sha }}"
+            echo "✅ Using manually provided commit SHA: ${SOURCE_SHA}"
           else
-            # Buscar en el historio de commits (dev se mergeo a qa)
-            echo "🔎 Searching in git history..."
+            echo "🔎 Auto-detecting commit SHA from merge message..."
             
-            # Buscar el commit más reciente que viene de dev
-            COMMIT_SHA=$(git log --grep="Auto-merge from feature/" --format="%H" -1 || git log --format="%H" -1)
+            # Buscar en el mensaje del último commit que viene del merge
+            # El mensaje del auto-merge contiene [sha:XXXXXX]
+            SOURCE_SHA=$(git log --format=%B -n 10 | grep -oP '\[sha:\K[a-f0-9]{40}(?=\])' | head -1)
             
-            if [[ -z "${COMMIT_SHA}" ]]; then
-              echo "❌ Could not find commit SHA"
+            if [[ -z "${SOURCE_SHA}" ]]; then
+              echo "⚠️  SHA not found in merge message, trying alternative method..."
+              
+              # Método alternativo: buscar el último commit antes del merge a dev
+              # Asumiendo que el merge a dev trae el commit original
+              SOURCE_SHA=$(git log --format=%H --grep="Auto-merge from feature/" -1 --merges | head -1)
+              
+              if [[ -z "${SOURCE_SHA}" ]]; then
+                # Último recurso: usar el commit anterior al merge a qa
+                SOURCE_SHA=$(git log --format=%H -n 2 | tail -1)
+              fi
+            fi
+            
+            if [[ -z "${SOURCE_SHA}" ]]; then
+              echo "❌ Could not auto-detect source commit SHA"
+              echo ""
+              echo "💡 MANUAL TRIGGER REQUIRED:"
+              echo "   Please run this workflow manually with the commit SHA from the feature workflow"
+              echo "   You can find it in the feature workflow run that built the image"
               exit 1
             fi
             
-            echo "📌 Found commit SHA: ${COMMIT_SHA}"
-            
-            # Buscar el workflow run ID en GitHub API
-            echo "🔎 Searching for workflow run ID via GitHub API..."
-            
-            WORKFLOWS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/runs?per_page=20")
-            
-            # Buscar el run que corresponde a este commit
-            RUN_ID=$(echo "${WORKFLOWS}" | jq -r ".workflow_runs[] | select(.head_sha == \"${COMMIT_SHA}\") | select(.name == \"Run Unit Tests and Merge to Dev\") | .id" | head -1)
-            
-            if [[ -z "${RUN_ID}" ]] || [[ "${RUN_ID}" == "null" ]]; then
-              echo "⚠️  Could not find exact run ID, trying latest feature workflow..."
-              RUN_ID=$(echo "${WORKFLOWS}" | jq -r '.workflow_runs[] | select(.name == "Run Unit Tests and Merge to Dev") | .id' | head -1)
-            fi
-            
-            if [[ -z "${RUN_ID}" ]] || [[ "${RUN_ID}" == "null" ]]; then
-              echo "❌ Could not find workflow run ID"
-              exit 1
-            fi
-            
-            echo "📌 Found run ID: ${RUN_ID}"
+            echo "📌 Auto-detected commit SHA: ${SOURCE_SHA}"
           fi
           
-          echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
-          echo "run_id=${RUN_ID}" >> $GITHUB_OUTPUT
-          echo "cache_key=image-info-${COMMIT_SHA}-${RUN_ID}" >> $GITHUB_OUTPUT
+          echo "source_sha=${SOURCE_SHA}" >> $GITHUB_OUTPUT
+          echo "artifact_name=image-info-${SOURCE_SHA}" >> $GITHUB_OUTPUT
           
           echo ""
-          echo "🔑 Cache key: image-info-${COMMIT_SHA}-${RUN_ID}"
+          echo "📦 Artifact to download: image-info-${SOURCE_SHA}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: 📥 Restore from GitHub Cache
-        id: cache-restore
-        uses: actions/cache/restore@v3
+      - name: 📥 Download image info artifact
+        uses: actions/download-artifact@v4
         with:
-          path: /tmp/image-info
-          key: ${{ steps.find-sha.outputs.cache_key }}
-          fail-on-cache-miss: false
+          name: ${{ steps.find-sha.outputs.artifact_name }}
+          path: ./image-info
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+        id: download-artifact
+
+      - name: 🔍 Check if artifact was downloaded
+        id: check-artifact
+        run: |
+          if [[ ! -f "./image-info/qa-image-info.json" ]]; then
+            echo "artifact_found=false" >> $GITHUB_OUTPUT
+            echo "❌ Artifact not found or download failed"
+          else
+            echo "artifact_found=true" >> $GITHUB_OUTPUT
+            echo "✅ Artifact downloaded successfully"
+          fi
+
+      - name: 📥 Try downloading from feature workflow run (if artifact not found)
+        if: steps.check-artifact.outputs.artifact_found == 'false'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔎 SEARCHING FOR ARTIFACT IN WORKFLOW RUNS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          SOURCE_SHA="${{ steps.find-sha.outputs.source_sha }}"
+          echo "Looking for workflows with commit: ${SOURCE_SHA}"
+          
+          # Buscar el workflow run que corresponde al commit
+          WORKFLOW_RUNS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs?per_page=50")
+          
+          # Buscar el run ID del workflow que generó el artifact
+          RUN_ID=$(echo "${WORKFLOW_RUNS}" | jq -r ".workflow_runs[] | select(.head_sha == \"${SOURCE_SHA}\") | select(.name == \"Run Unit Tests and Merge to Dev\") | .id" | head -1)
+          
+          if [[ -z "${RUN_ID}" ]] || [[ "${RUN_ID}" == "null" ]]; then
+            echo "❌ ERROR: Could not find workflow run for commit ${SOURCE_SHA}"
+            echo ""
+            echo "💡 TROUBLESHOOTING:"
+            echo "   1. Verify the feature workflow completed successfully"
+            echo "   2. Check that the commit SHA is correct: ${SOURCE_SHA}"
+            echo "   3. Ensure the 'save-image-info' job ran successfully"
+            echo "   4. Artifacts are only retained for 7 days - check if it expired"
+            echo ""
+            echo "🔧 MANUAL SOLUTION:"
+            echo "   Run this workflow manually and provide the commit SHA:"
+            echo "   gh workflow run 02-qa-base.yml --ref qa -f commit_sha=${SOURCE_SHA}"
+            exit 1
+          fi
+          
+          echo "✅ Found workflow run ID: ${RUN_ID}"
+          
+          # Listar artifacts del run
+          ARTIFACTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts")
+          
+          ARTIFACT_ID=$(echo "${ARTIFACTS}" | jq -r ".artifacts[] | select(.name == \"image-info-${SOURCE_SHA}\") | .id" | head -1)
+          
+          if [[ -z "${ARTIFACT_ID}" ]] || [[ "${ARTIFACT_ID}" == "null" ]]; then
+            echo "❌ ERROR: Artifact not found in workflow run ${RUN_ID}"
+            echo ""
+            echo "Available artifacts:"
+            echo "${ARTIFACTS}" | jq -r '.artifacts[] | "  - \(.name) (ID: \(.id))"'
+            exit 1
+          fi
+          
+          echo "✅ Found artifact ID: ${ARTIFACT_ID}"
+          
+          # Descargar el artifact
+          echo "📥 Downloading artifact..."
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            -o artifact.zip
+          
+          mkdir -p ./image-info
+          unzip -q artifact.zip -d ./image-info
+          
+          if [[ -f "./image-info/qa-image-info.json" ]]; then
+            echo "✅ Artifact downloaded and extracted successfully"
+          else
+            echo "❌ Failed to extract artifact"
+            exit 1
+          fi
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: 📖 Read and validate image info
         id: read-info
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📖 READING IMAGE INFORMATION FROM CACHE"
+          echo "📖 READING IMAGE INFORMATION FROM ARTIFACT"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          INFO_FILE="/tmp/image-info/qa-image-info.json"
-          
-          # Verificar que el cache se restauró correctamente
-          if [[ "${{ steps.cache-restore.outputs.cache-hit }}" != "true" ]]; then
-            echo "❌ ERROR: Cache not found!"
-            echo "   Cache key: ${{ steps.find-sha.outputs.cache_key }}"
-            echo ""
-            echo "💡 TROUBLESHOOTING:"
-            echo "   1. Verify the feature workflow completed successfully"
-            echo "   2. Check if 'save-image-info-cache' job ran in feature workflow"
-            echo "   3. Ensure the commit SHA and run ID are correct:"
-            echo "      - Commit SHA: ${{ steps.find-sha.outputs.commit_sha }}"
-            echo "      - Run ID: ${{ steps.find-sha.outputs.run_id }}"
-            echo ""
-            echo "🔗 You can also trigger this workflow manually with:"
-            echo "   commit_sha: <sha-from-feature-workflow>"
-            echo "   run_id: <run-id-from-feature-workflow>"
-            echo ""
-            exit 1
-          fi
+          INFO_FILE="./image-info/qa-image-info.json"
           
           # Verificar que el archivo existe
           if [ ! -f "${INFO_FILE}" ]; then
-            echo "❌ ERROR: Image info file not found in cache!"
+            echo "❌ ERROR: Image info file not found after download!"
             echo "   Expected file: ${INFO_FILE}"
+            ls -la ./image-info/ || true
             exit 1
           fi
           
-          echo "✅ Cache restored successfully"
-          echo "✅ Image info file found: ${INFO_FILE}"
+          echo "✅ Image info file found"
           echo ""
           echo "📄 File content:"
           cat "${INFO_FILE}" | jq '.' || {
@@ -260,7 +310,7 @@ jobs:
       labels: 'automated,deployment,integration,qa'
 
   # ───────────────────────────────────────────────────────────
-  # Job 5: Saludo Manual con Aprobación (SOLO MANUAL)
+  # Job 5 & 6: Aprobaciones manuales
   # ───────────────────────────────────────────────────────────
   saludar:
     runs-on: 'ubuntu-latest'
@@ -268,20 +318,15 @@ jobs:
     needs: create-pr-to-integration
     steps:
       - name: Hola Mundo
-        run: |
-          echo "¡Hola Mundo!"
+        run: echo "¡Hola Mundo!"
 
-  # ───────────────────────────────────────────────────────────
-  # Job 6: Saludo Manual con Aprobación (SOLO MANUAL)
-  # ───────────────────────────────────────────────────────────
   saludar-2:
     runs-on: 'ubuntu-latest'
     environment: 'qa'
     needs: create-pr-to-integration
     steps:
       - name: Hola Mundo
-        run: |
-          echo "¡Hola Mundo!"
+        run: echo "¡Hola Mundo!"
 
   # ───────────────────────────────────────────────────────────
   # Job FINAL: Resumen completo del workflow QA
@@ -303,7 +348,7 @@ jobs:
           echo "| Job | Status | Details |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|---------|" >> $GITHUB_STEP_SUMMARY
           echo "| 🧪 QA Tests | ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }} | Quality Assurance Tests |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📦 Get Image Info | ${{ needs.get-image-info.result == 'success' && '✅ Retrieved' || '❌ Failed' }} | Read from Cache |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Get Image Info | ${{ needs.get-image-info.result == 'success' && '✅ Retrieved' || '❌ Failed' }} | Downloaded from Artifact |" >> $GITHUB_STEP_SUMMARY
           echo "| 🚀 Deploy to QA | ${{ needs.deploy-qa.result == 'success' && '✅ Deployed' || needs.deploy-qa.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | Update K8s manifests |" >> $GITHUB_STEP_SUMMARY
           echo "| 📝 Create PR | ${{ needs.create-pr-to-integration.result == 'success' && '✅ Created' || '❌ Failed' }} | QA → Integration |" >> $GITHUB_STEP_SUMMARY
           echo "| 👋 Manual Approval 1 | ${{ needs.saludar.result == 'success' && '✅ Approved' || needs.saludar.result == 'skipped' && '⏭️ Skipped' || '⏸️ Pending' }} | Environment: qa |" >> $GITHUB_STEP_SUMMARY
@@ -322,19 +367,11 @@ jobs:
             echo "| **Source Commit** | \`${{ needs.get-image-info.outputs.commit_sha }}\` |" >> $GITHUB_STEP_SUMMARY
             echo "| **Source Branch** | \`${{ needs.get-image-info.outputs.source_branch }}\` |" >> $GITHUB_STEP_SUMMARY
             echo "| **Environment** | \`qa\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **GCP Project** | \`${{ needs.get-image-info.outputs.gcp_project_id }}\` |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
-            if [[ -n "${{ needs.get-image-info.outputs.all_tags }}" ]] && [[ "${{ needs.get-image-info.outputs.all_tags }}" != "null" ]]; then
-              echo "### 🏷️ All Available Tags" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "\`${{ needs.get-image-info.outputs.all_tags }}\`" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-            fi
-            
-            echo "### 📦 Cache Information" >> $GITHUB_STEP_SUMMARY
+            echo "### 📦 Artifact Information" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "✅ Image metadata retrieved from GitHub Cache" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Image metadata retrieved from GitHub Artifact" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
           
@@ -347,20 +384,6 @@ jobs:
           echo "| **Triggered By** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Timestamp** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Next steps
-          echo "## 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [[ "${{ needs.deploy-qa.result }}" == "success" ]]; then
-            echo "1. ✅ **Deployment Completed**: Kubernetes manifests updated with image \`${{ needs.get-image-info.outputs.tag_qa }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "2. 📝 **PR Created**: Pull request to Integration ready for review" >> $GITHUB_STEP_SUMMARY
-            echo "3. ✅ **Manual Approvals**: Complete approval steps if needed" >> $GITHUB_STEP_SUMMARY
-            echo "4. 🚀 **Next**: Merge PR to deploy to Integration environment" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ Please review the logs to identify and resolve issues." >> $GITHUB_STEP_SUMMARY
-          fi
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "---" >> $GITHUB_STEP_SUMMARY
