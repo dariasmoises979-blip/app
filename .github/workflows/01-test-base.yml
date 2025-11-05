@@ -84,27 +84,29 @@ jobs:
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
 
   # ───────────────────────────────────────────────────────────
-  # Job: Guardar información de la imagen en CACHE
+  # Job: Guardar información de la imagen en ARTIFACT
   # ───────────────────────────────────────────────────────────
-  save-image-info-cache:
-    name: 💾 Save Image Info to Cache
+  save-image-info:
+    name: 💾 Save Image Info to Artifact
     needs: build-image
     runs-on: ubuntu-latest
+    outputs:
+      artifact_name: ${{ steps.upload.outputs.artifact_name }}
     steps:
       - name: 📝 Create image info file
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "💾 SAVING IMAGE INFORMATION TO CACHE"
+          echo "💾 SAVING IMAGE INFORMATION TO ARTIFACT"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          mkdir -p /tmp/image-info
+          mkdir -p image-info
           
           IMAGE_TAG="${{ needs.build-image.outputs.image_tag }}"
           FULL_IMAGE="${{ needs.build-image.outputs.full_image }}"
           SHORT_SHA="${{ needs.build-image.outputs.short_sha }}"
           ALL_TAGS="${{ needs.build-image.outputs.all_tags }}"
           
-          cat > /tmp/image-info/qa-image-info.json << EOF
+          cat > image-info/qa-image-info.json << EOF
           {
             "docker_image": "mi-aplicacion",
             "gcp_project_id": "elite-ceremony-476307-s9",
@@ -119,42 +121,50 @@ jobs:
             "build_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
             "source_branch": "${{ github.ref_name }}",
             "triggered_by": "${{ github.actor }}",
-            "workflow_run_id": "${{ github.run_id }}"
+            "workflow_run_id": "${{ github.run_id }}",
+            "workflow_run_number": "${{ github.run_number }}"
           }
           EOF
           
           echo "✅ Image info file created:"
-          cat /tmp/image-info/qa-image-info.json | jq '.'
+          cat image-info/qa-image-info.json | jq '.'
           echo ""
           echo "📊 Summary:"
           echo "   Primary Tag: ${IMAGE_TAG}"
           echo "   Full Image: ${FULL_IMAGE}"
           echo "   Short SHA: ${SHORT_SHA}"
+          echo "   Commit SHA: ${{ github.sha }}"
+          echo "   Run ID: ${{ github.run_id }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: 💾 Save to GitHub Cache
-        uses: actions/cache/save@v3
+      - name: 📤 Upload image info as artifact
+        id: upload
+        uses: actions/upload-artifact@v4
         with:
-          path: /tmp/image-info
-          key: image-info-${{ github.sha }}-${{ github.run_id }}
+          name: image-info-${{ github.sha }}
+          path: image-info/
+          retention-days: 7
           
-      - name: 📢 Output cache key
+      - name: 📢 Output artifact info
         run: |
-          echo "🔑 Cache Key: image-info-${{ github.sha }}-${{ github.run_id }}"
-          echo "📦 This key will be used in QA workflow to retrieve image info"
+          echo "📦 Artifact Name: image-info-${{ github.sha }}"
+          echo "🔑 Commit SHA: ${{ github.sha }}"
+          echo "🏃 Run ID: ${{ github.run_id }}"
+          echo ""
+          echo "ℹ️  This artifact will be available to QA workflow"
 
   merge-to-dev:
     name: Merge to Dev
-    needs: [test, build-image, save-image-info-cache]
+    needs: [test, build-image, save-image-info]
     if: startsWith(github.ref_name, 'feature/') && success()
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main
     with:
       source_branch: ${{ github.ref_name }}
       target_branch: 'dev'
       use_fast_forward: false
-      merge_message: '🔀 Auto-merge from ${{ github.ref_name }} after successful tests'
+      merge_message: '🔀 Auto-merge from ${{ github.ref_name }} after successful tests [sha:${{ github.sha }}]'
 
-  create-pr-to-integration:
+  create-pr-to-qa:
     name: Create PR to QA
     needs: merge-to-dev
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
@@ -170,7 +180,7 @@ jobs:
   # ───────────────────────────────────────────────────────────
   workflow-summary:
     name: 📊 Workflow Summary
-    needs: [test, analyze-queries, build-image, save-image-info-cache, merge-to-dev, create-pr-to-integration]
+    needs: [test, analyze-queries, build-image, save-image-info, merge-to-dev, create-pr-to-qa]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -187,9 +197,9 @@ jobs:
           echo "| 🧪 Tests | ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }} | Unit & Integration Tests |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔍 Query Analysis | ${{ needs.analyze-queries.result == 'success' && '✅ Completed' || '❌ Failed' }} | SQL Performance Analysis |" >> $GITHUB_STEP_SUMMARY
           echo "| 🐳 Build Image | ${{ needs.build-image.result == 'success' && '✅ Built' || '❌ Failed' }} | Docker Image |" >> $GITHUB_STEP_SUMMARY
-          echo "| 💾 Save to Cache | ${{ needs.save-image-info-cache.result == 'success' && '✅ Saved' || '❌ Failed' }} | Image Metadata |" >> $GITHUB_STEP_SUMMARY
+          echo "| 💾 Save Artifact | ${{ needs.save-image-info.result == 'success' && '✅ Saved' || '❌ Failed' }} | Image Metadata |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔀 Merge to Dev | ${{ needs.merge-to-dev.result == 'success' && '✅ Merged' || '❌ Failed' }} | Feature → Dev |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📝 Create PR | ${{ needs.create-pr-to-integration.result == 'success' && '✅ Created' || '❌ Failed' }} | Dev → QA |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📝 Create PR | ${{ needs.create-pr-to-qa.result == 'success' && '✅ Created' || '❌ Failed' }} | Dev → QA |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Información de la imagen construida
@@ -206,14 +216,16 @@ jobs:
             echo "| **Environment** | \`qa\` |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
-            echo "### 🔑 Cache Information" >> $GITHUB_STEP_SUMMARY
+            echo "### 📦 Artifact Information" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Image metadata saved to GitHub Cache with key:" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "image-info-${{ github.sha }}-${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "Image metadata saved as GitHub Artifact:" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "The QA workflow will automatically retrieve this information." >> $GITHUB_STEP_SUMMARY
+            echo "- **Artifact Name:** \`image-info-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Commit SHA:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Run ID:** \`${{ github.run_id }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Retention:** 7 days" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The QA workflow will automatically retrieve this artifact using the commit SHA." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
           
@@ -234,7 +246,7 @@ jobs:
 
   say-hello:
     name: Confirmación de modificación independiente
-    needs: create-pr-to-integration
+    needs: create-pr-to-qa
     if: success()
     runs-on: ubuntu-latest
     steps:
@@ -243,4 +255,4 @@ jobs:
           echo "✅ Se demuestra que se puede modificar el workflow por proyecto sin afectar a otros proyectos."
           echo "🐳 Image built: ${{ needs.build-image.outputs.full_image }}"
           echo "🏷️  Tag: ${{ needs.build-image.outputs.image_tag }}"
-          echo "🔑 Cache key: image-info-${{ github.sha }}-${{ github.run_id }}"
+          echo "📦 Artifact: image-info-${{ github.sha }}"
