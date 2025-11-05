@@ -3,14 +3,15 @@
   "gcp_project_id": "elite-ceremony-476307-s9",
   "gcp_region": "us-central1",
   "artifact_registry": "dariasmoises979",
-  "image_tag": "qa-c1526a6",
-  "full_image": "us-central1-docker.pkg.dev/elite-ceremony-476307-s9/dariasmoises979/mi-aplicacion:qa-c1526a6",
+  "image_tag": "qa-891d6e6",
+  "full_image": "us-central1-docker.pkg.dev/elite-ceremony-476307-s9/dariasmoises979/mi-aplicacion:qa-891d6e6",
   "environment": "qa",
-  "commit_sha": "c1526a623e0aea3b2e68788c085d10e55f043b84",
-  "commit_sha_short": "c1526a6",
-  "all_tags": "qa-c1526a6,qa,feature-v1.1-c1526a6",
-  "build_time": "2025-11-05T18:26:48Z",
-  "source_branch": "feature/v1.1",
+  "commit_sha": "891d6e6ba886ab64136ac9a6d63c97b1f53d63e2",
+  "commit_sha_short": "891d6e6",
+  "all_tags": "qa-891d6e6,qa,qa-891d6e6",
+  "build_time": "2025-11-05T19:48:00Z",
+  "source_branch": "qa",
   "triggered_by": "dariasmoises979-blip",
-  "workflow_run_id": "19112148956"
+  "workflow_run_id": "19114208291",
+  "workflow_run_url": "https://github.com/dariasmoises979-blip/app/actions/runs/19114208291"
 }
