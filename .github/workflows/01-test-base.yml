@@ -4,9 +4,7 @@ on:
   push:
     branches: 
       - feature/**
-  # ───────────────────────────────────────────────────────────
-  # Job 1: Llamar al workflow reusable de tests
-  # ───────────────────────────────────────────────────────────
+
 jobs:
   test:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/test.yml@main
@@ -14,7 +12,7 @@ jobs:
       external_repo: dariasmoises979-blip/app
       external_repo_ref: main
       external_repo_path: ./app-repo
-      projectBaseDir: "./pipeline-build"  # ✅ Nuevo
+      projectBaseDir: "./pipeline-build"
       sonar_args: >
         -Dsonar.organization=dariasmoises979-blip
         -Dsonar.projectKey=dariasmoises979-blip_app
@@ -28,9 +26,6 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2 }}
 
-  # ───────────────────────────────────────────────────────────
-  # Job 1.5: Análisis de queries (paralelo al test)
-  # ───────────────────────────────────────────────────────────
   analyze-queries:
     name: Analyze Database and App Queries
     runs-on: ubuntu-latest
@@ -48,7 +43,6 @@ jobs:
       - name: 🧮 Escanear consultas SQL en el proyecto
         run: |
           echo "🔍 Buscando consultas SQL en el código..."
-          # Ejemplo de comando realista (simulado)
           grep -R "SELECT" . || echo "No se encontraron consultas SQL directas."
           echo "✅ Escaneo de queries completado."
 
@@ -70,93 +64,80 @@ jobs:
           echo "-----------------------------------------"
           echo "✅ Análisis de queries completado exitosamente."
 
-  # ───────────────────────────────────────────────────────────
-  # Job 2: Llamar al workflow reusable de merge DEV
-  # ───────────────────────────────────────────────────────────
   merge-to-dev:
     name: Merge to Dev
-    needs: test  # ⚙️ Solo se ejecuta si los tests pasan
-    # ✅ Validación adicional: solo si es una rama feature
+    needs: test
     if: startsWith(github.ref_name, 'feature/') && success()
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main   # 📂 Ruta al workflow reusable
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main
     with:
-      source_branch: ${{ github.ref_name }}   # La rama feature actual
-      target_branch: 'dev'                     # Fusionar hacia dev
-      use_fast_forward: false                  # Crear commit de merge explícito
+      source_branch: ${{ github.ref_name }}
+      target_branch: 'dev'
+      use_fast_forward: false
       merge_message: '🔀 Auto-merge from ${{ github.ref_name }} after successful tests'
 
-
-  # ───────────────────────────────────────────────────────────
-  # Job 3: Crear PR de dev a qa
-  # ───────────────────────────────────────────────────────────
   create-pr-to-integration:
     name: Create PR to Integration
-    needs: merge-to-dev  # ⚙️ Solo se ejecuta si los tests pasan
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main  # 📂 Ruta al workflow reusable
+    needs: merge-to-dev
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
     with:
-      source_branch: 'dev'                    # Desde dev
-      target_branch: 'qa'                     # Hacia qa
+      source_branch: 'dev'
+      target_branch: 'qa'
       pr_title: '🚀 Deploy DEV to QA'
       environment: 'qa'
       labels: 'automated,deployment,qa,dev'
 
-
-  # ───────────────────────────────────────────────────────────
-  # Job 4: Build Docker Image
-  # ───────────────────────────────────────────────────────────
   build-image:
     name: Build Docker Image
-    needs: create-pr-to-integration  # ⚙️ Solo se ejecuta si los tests pasan
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-gcp.yml@main  # 📂 Ruta al workflow reusable
+    needs: create-pr-to-integration
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-gcp.yml@main
     with:
       docker_image: mi-aplicacion
-      #dockerhub_username: dariasmoises979
       gcp_project_id: elite-ceremony-476307-s9 
       gcp_region: us-central1
       artifact_registry: dariasmoises979
-     
       environment: qa
-      
-      # Configuración del repo externo
       external_repo: dariasmoises979-blip/app
       external_repo_ref: main
       external_repo_path: ./app-repo
-      
-      # Rutas del build
       dockerfile_path: ./app-repo/local/Dockerfile
-      build_context: ./app-repo                    # ✅ Sin barra final (correcto)
-      
+      build_context: ./app-repo
     secrets:
-      #DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+
   # ───────────────────────────────────────────────────────────
-  # Job i: Guardar información de la imagen usando los outputs de build-image
+  # Job NUEVO: Guardar información de la imagen en la rama feature
   # ───────────────────────────────────────────────────────────
   save-image-info:
-    name: 💾 Save Image Info to Repository
+    name: 💾 Save Image Info to Feature Branch
     needs: build-image
     runs-on: ubuntu-latest
     steps:
-      - name: 📦 Checkout code
+      - name: 📦 Checkout feature branch
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_TOKEN2 }}
-          ref: ${{ github.head_ref || github.ref }}
+          ref: ${{ github.ref_name }}  # ← Usar la rama feature actual
+          fetch-depth: 0
 
-      - name: 📝 Create image info file
+      - name: 📝 Create image info file in feature branch
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "💾 SAVING IMAGE INFORMATION FROM BUILD OUTPUT"
+          echo "💾 SAVING IMAGE INFORMATION TO FEATURE BRANCH"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📍 Current branch: ${{ github.ref_name }}"
+          echo ""
           
+          # Crear directorio si no existe
           mkdir -p .github/deployment-info
           
+          # USAR LOS OUTPUTS DEL JOB build-image
           IMAGE_TAG="${{ needs.build-image.outputs.image_tag }}"
           FULL_IMAGE="${{ needs.build-image.outputs.full_image }}"
           SHORT_SHA="${{ needs.build-image.outputs.short_sha }}"
           ALL_TAGS="${{ needs.build-image.outputs.all_tags }}"
           
+          # Crear archivo JSON con la información REAL del build
           cat > .github/deployment-info/qa-image-info.json << EOF
           {
             "docker_image": "mi-aplicacion",
@@ -169,14 +150,14 @@ jobs:
             "commit_sha": "${{ github.sha }}",
             "commit_sha_short": "${SHORT_SHA}",
             "all_tags": "${ALL_TAGS}",
-            "build_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "build_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ)",
             "source_branch": "${{ github.ref_name }}",
             "triggered_by": "${{ github.actor }}",
             "workflow_run_id": "${{ github.run_id }}"
           }
           EOF
           
-          echo "✅ Image info file created:"
+          echo "✅ Image info file created with REAL build outputs:"
           cat .github/deployment-info/qa-image-info.json | jq '.'
           echo ""
           echo "📊 Summary:"
@@ -184,34 +165,104 @@ jobs:
           echo "   Full Image: ${FULL_IMAGE}"
           echo "   Short SHA: ${SHORT_SHA}"
           echo "   All Tags: ${ALL_TAGS}"
+          echo "   Saving to branch: ${{ github.ref_name }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: 💾 Commit and push image info
-        env:
-          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+      - name: 💾 Commit to feature branch
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          echo "📍 Current branch: ${BRANCH_NAME}"
           
           git add .github/deployment-info/qa-image-info.json
           
           if git diff --staged --quiet; then
             echo "⏭️  No changes to commit"
           else
-            git commit -m "🐳 Update QA image info - ${{ needs.build-image.outputs.image_tag }}" \
+            git commit -m "🐳 Add QA image info - ${{ needs.build-image.outputs.image_tag }}" \
               -m "Image: ${{ needs.build-image.outputs.full_image }}" \
-              -m "Source: ${BRANCH_NAME}" \
               -m "Commit: ${{ needs.build-image.outputs.short_sha }}" \
               -m "Triggered by: ${{ github.actor }}"
             
-            # ✅ Empujar a la misma rama del workflow
-            git push origin "${BRANCH_NAME}"
-            echo "✅ Image info pushed successfully to ${BRANCH_NAME}"
+            git push origin ${{ github.ref_name }}
+            echo "✅ Image info committed to ${{ github.ref_name }}"
+            echo "📌 This file will be merged to dev, and then to main through the PR process"
           fi
 
-  
+  # ───────────────────────────────────────────────────────────
+  # Job NUEVO: Copiar archivo a main después del merge a dev
+  # ───────────────────────────────────────────────────────────
+  copy-to-main:
+    name: 📤 Copy Image Info to Main
+    needs: [merge-to-dev, save-image-info]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📦 Checkout dev branch
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN2 }}
+          ref: dev
+          fetch-depth: 0
+
+      - name: 🔍 Verify file exists in dev
+        id: check-file
+        run: |
+          if [ -f ".github/deployment-info/qa-image-info.json" ]; then
+            echo "✅ Image info file found in dev branch"
+            echo "file_exists=true" >> $GITHUB_OUTPUT
+            cat .github/deployment-info/qa-image-info.json | jq '.'
+          else
+            echo "⚠️  Image info file not found in dev branch"
+            echo "file_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📤 Copy file to main branch
+        if: steps.check-file.outputs.file_exists == 'true'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📤 COPYING IMAGE INFO TO MAIN BRANCH"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Guardar el contenido del archivo
+          IMAGE_INFO=$(cat .github/deployment-info/qa-image-info.json)
+          
+          # Cambiar a main
+          git fetch origin main
+          git checkout main
+          
+          # Crear directorio si no existe
+          mkdir -p .github/deployment-info
+          
+          # Escribir el archivo
+          echo "${IMAGE_INFO}" > .github/deployment-info/qa-image-info.json
+          
+          # Configurar git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Commit y push
+          git add .github/deployment-info/qa-image-info.json
+          
+          if git diff --staged --quiet; then
+            echo "⏭️  No changes to commit to main"
+          else
+            IMAGE_TAG=$(echo "${IMAGE_INFO}" | jq -r '.image_tag')
+            FULL_IMAGE=$(echo "${IMAGE_INFO}" | jq -r '.full_image')
+            
+            git commit -m "🐳 Update QA image info in main - ${IMAGE_TAG}" \
+              -m "Image: ${FULL_IMAGE}" \
+              -m "Source: ${{ github.ref_name }}" \
+              -m "Merged from: dev" \
+              -m "Triggered by: ${{ github.actor }}"
+            
+            git push origin main
+            echo "✅ Image info pushed to main branch"
+            echo ""
+            echo "📊 File location: .github/deployment-info/qa-image-info.json"
+            echo "🌿 Branch: main"
+          fi
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
   # ───────────────────────────────────────────────────────────
   # Job FINAL: Resumen completo del workflow
   # ───────────────────────────────────────────────────────────
@@ -300,16 +351,14 @@ jobs:
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "_Generated by Feature Workflow - $(date -u +'%Y-%m-%d %H:%M:%S UTC')_" >> $GITHUB_STEP_SUMMARY
 
- 
- #############################################################################
- # ───────────────────────────────────────────────────────────
-  # Job 5: Mensaje de confirmación
-  # ───────────────────────────────────────────────────────────
   say-hello:
     name: Confirmación de modificación independiente
-    needs: [build-image]
+    needs: [save-image-info]
     if: success()
     runs-on: ubuntu-latest
     steps:
       - name: Mensaje final
-        run: echo "✅ Se demuestra que se puede modificar el workflow por proyecto sin afectar a otros proyectos."     
+        run: |
+          echo "✅ Se demuestra que se puede modificar el workflow por proyecto sin afectar a otros proyectos."
+          echo "🐳 Image built: ${{ needs.build-image.outputs.full_image }}"
+          echo "🏷️  Tag: ${{ needs.build-image.outputs.image_tag }}"
