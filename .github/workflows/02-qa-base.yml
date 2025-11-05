@@ -36,187 +36,94 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # ───────────────────────────────────────────────────────────
-  # Job 2: Obtener información de la imagen creada en Feature
+  # Job 2: Leer información de la imagen desde el archivo guardado
   # ───────────────────────────────────────────────────────────
   get-image-info:
-    name: 📦 Get Feature Image from GCP
+    name: 📦 Get Image Info from Saved File
     runs-on: ubuntu-latest
     needs: test
     outputs:
-      docker_image: ${{ steps.get-latest-image.outputs.docker_image }}
-      gcp_project_id: ${{ steps.get-latest-image.outputs.gcp_project_id }}
-      gcp_region: ${{ steps.get-latest-image.outputs.gcp_region }}
-      artifact_registry: ${{ steps.get-latest-image.outputs.artifact_registry }}
-      tag_qa: ${{ steps.get-latest-image.outputs.tag_qa }}
-      full_image_url: ${{ steps.get-latest-image.outputs.full_image_url }}
-      feature_commit: ${{ steps.get-feature-commit.outputs.feature_commit }}
-      feature_commit_short: ${{ steps.get-feature-commit.outputs.feature_commit_short }}
+      docker_image: ${{ steps.read-info.outputs.docker_image }}
+      gcp_project_id: ${{ steps.read-info.outputs.gcp_project_id }}
+      gcp_region: ${{ steps.read-info.outputs.gcp_region }}
+      artifact_registry: ${{ steps.read-info.outputs.artifact_registry }}
+      tag_qa: ${{ steps.read-info.outputs.tag_qa }}
+      full_image_url: ${{ steps.read-info.outputs.full_image_url }}
+      commit_sha: ${{ steps.read-info.outputs.commit_sha }}
+      all_tags: ${{ steps.read-info.outputs.all_tags }}
     
     steps:
-      - name: 🔐 Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: ☁️ Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: elite-ceremony-476307-s9
-
-      - name: 📦 Checkout QA branch
+      - name: 📦 Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: qa
-          fetch-depth: 0
+          ref: main
+          fetch-depth: 1
 
-      - name: 🔍 Get feature commit SHA from merge
-        id: get-feature-commit
+      - name: 📖 Read and validate image info file
+        id: read-info
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🔍 EXTRACTING FEATURE COMMIT FROM MERGE"
+          echo "📖 READING IMAGE INFORMATION FROM SAVED FILE"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          # Obtener el último commit de la rama QA
-          CURRENT_COMMIT=$(git rev-parse HEAD)
-          echo "📌 Current QA commit: ${CURRENT_COMMIT}"
+          INFO_FILE=".github/deployment-info/qa-image-info.json"
           
-          # Obtener el mensaje del último commit
-          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
-          echo "📝 Commit message: ${COMMIT_MESSAGE}"
-          
-          # Si es un merge commit, obtener el commit padre de la feature
-          if git rev-parse HEAD^2 &>/dev/null; then
-            # Es un merge commit, el segundo padre es el commit de feature
-            FEATURE_COMMIT=$(git rev-parse HEAD^2)
-            echo "✅ Merge commit detected"
-            echo "🎯 Feature commit (parent 2): ${FEATURE_COMMIT}"
-          else
-            # No es un merge commit, usar el commit actual
-            FEATURE_COMMIT=${CURRENT_COMMIT}
-            echo "⚠️  Not a merge commit, using current commit"
-            echo "🎯 Feature commit: ${FEATURE_COMMIT}"
-          fi
-          
-          # Obtener SHA corto para el tag (primeros 7 caracteres)
-          FEATURE_COMMIT_SHORT=${FEATURE_COMMIT:0:7}
-          
-          echo ""
-          echo "📊 Summary:"
-          echo "   Full SHA: ${FEATURE_COMMIT}"
-          echo "   Short SHA: ${FEATURE_COMMIT_SHORT}"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          echo "feature_commit=${FEATURE_COMMIT}" >> $GITHUB_OUTPUT
-          echo "feature_commit_short=${FEATURE_COMMIT_SHORT}" >> $GITHUB_OUTPUT
-
-      - name: 🔍 Get image info from Artifact Registry
-        id: get-latest-image
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📦 FETCHING IMAGE FROM GCP ARTIFACT REGISTRY"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          # Configuración (debe coincidir con 01-feature-base.yml)
-          DOCKER_IMAGE="mi-aplicacion"
-          GCP_PROJECT_ID="elite-ceremony-476307-s9"
-          GCP_REGION="us-central1"
-          ARTIFACT_REGISTRY="dariasmoises979"
-          
-          # Obtener el commit SHA de feature
-          FEATURE_COMMIT_SHORT="${{ steps.get-feature-commit.outputs.feature_commit_short }}"
-          
-          echo "🔍 Searching for image: ${DOCKER_IMAGE}"
-          echo "📍 Registry: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}"
-          echo "🎯 Looking for tag with commit: ${FEATURE_COMMIT_SHORT}"
-          echo ""
-          
-          # PASO 1: Listar TODAS las imágenes disponibles en el registry
-          echo "📋 Listing all available images in registry:"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          gcloud artifacts docker images list \
-            ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY} \
-            --include-tags \
-            --format="table(package, version, tags)" \
-            --limit=20 2>/dev/null || echo "❌ Could not list images"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          
-          # PASO 2: Intentar listar tags de la imagen específica
-          echo "📋 Listing tags for ${DOCKER_IMAGE}:"
-          gcloud artifacts docker tags list \
-            ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE} \
-            --format="table(tag, version)" \
-            --limit=10 2>/dev/null || echo "⚠️  Image '${DOCKER_IMAGE}' not found or has no tags"
-          echo ""
-          
-          # PASO 3: Buscar la imagen con el tag que contiene el commit SHA
-          echo "🔍 Searching for tag containing commit SHA: ${FEATURE_COMMIT_SHORT}"
-          IMAGE_TAG=$(gcloud artifacts docker tags list \
-            ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE} \
-            --format="value(tag)" \
-            --filter="tag~${FEATURE_COMMIT_SHORT}" \
-            --limit=1 2>/dev/null || echo "")
-          
-          # PASO 4: Si no encuentra por commit SHA, buscar por patrón qa-
-          if [ -z "${IMAGE_TAG}" ]; then
-            echo "⚠️  No image found with commit SHA, searching for latest qa- tag..."
-            IMAGE_TAG=$(gcloud artifacts docker tags list \
-              ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE} \
-              --format="value(tag)" \
-              --sort-by="~UPDATE_TIME" \
-              --filter="tag:qa-*" \
-              --limit=1 2>/dev/null || echo "")
-          fi
-          
-          # PASO 5: Si aún no encuentra, buscar la más reciente
-          if [ -z "${IMAGE_TAG}" ]; then
-            echo "⚠️  No qa- tag found, getting latest tag..."
-            IMAGE_TAG=$(gcloud artifacts docker tags list \
-              ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE} \
-              --format="value(tag)" \
-              --sort-by="~UPDATE_TIME" \
-              --limit=1 2>/dev/null || echo "")
-          fi
-          
-          # PASO 6: Validar resultado
-          if [ -z "${IMAGE_TAG}" ]; then
+          # Verificar que el archivo existe
+          if [ ! -f "${INFO_FILE}" ]; then
+            echo "❌ ERROR: Image info file not found!"
+            echo "   Expected file: ${INFO_FILE}"
             echo ""
-            echo "❌ ERROR: No image found in Artifact Registry"
+            echo "💡 TROUBLESHOOTING:"
+            echo "   1. Verify the 'save-image-info' job ran successfully in feature workflow"
+            echo "   2. Check if the file was committed to the 'main' branch"
+            echo "   3. Ensure the feature workflow completed before merging to QA"
             echo ""
-            echo "🔍 DEBUG INFORMATION:"
-            echo "   Expected image: ${DOCKER_IMAGE}"
-            echo "   Expected registry: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}"
-            echo "   Feature commit: ${FEATURE_COMMIT_SHORT}"
-            echo ""
-            echo "💡 POSSIBLE CAUSES:"
-            echo "   1. Image name mismatch (check 01-feature-base.yml docker_image parameter)"
-            echo "   2. Image was not built successfully in feature workflow"
-            echo "   3. Image was built in a different registry"
-            echo "   4. Image was built with a different naming convention"
-            echo ""
-            echo "🔧 NEXT STEPS:"
-            echo "   1. Check the logs of 'build-image' job in the feature workflow"
-            echo "   2. Verify the image was pushed successfully"
-            echo "   3. Check GCP Console: https://console.cloud.google.com/artifacts"
+            echo "🔗 Feature workflow should have job: save-image-info"
             echo ""
             exit 1
           fi
           
-          # Construir URL completa
-          FULL_IMAGE_URL="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY}/${DOCKER_IMAGE}:${IMAGE_TAG}"
-          
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✅ Image found:"
-          echo "   🐳 Image: ${DOCKER_IMAGE}"
-          echo "   🏷️  Tag: ${IMAGE_TAG}"
-          echo "   🔗 Full URL: ${FULL_IMAGE_URL}"
+          echo "✅ Image info file found: ${INFO_FILE}"
+          echo ""
+          echo "📄 File content:"
+          cat "${INFO_FILE}" | jq '.' || {
+            echo "❌ ERROR: Invalid JSON in image info file"
+            cat "${INFO_FILE}"
+            exit 1
+          }
           echo ""
           
-          # Obtener información adicional de la imagen
-          echo "📊 Image details:"
-          gcloud artifacts docker images describe ${FULL_IMAGE_URL} \
-            --format="table(image_summary.fully_qualified_digest, image_summary.upload_time)" 2>/dev/null || echo "   (details not available)"
+          # Extraer información usando jq
+          DOCKER_IMAGE=$(jq -r '.docker_image' "${INFO_FILE}")
+          GCP_PROJECT_ID=$(jq -r '.gcp_project_id' "${INFO_FILE}")
+          GCP_REGION=$(jq -r '.gcp_region' "${INFO_FILE}")
+          ARTIFACT_REGISTRY=$(jq -r '.artifact_registry' "${INFO_FILE}")
+          IMAGE_TAG=$(jq -r '.image_tag' "${INFO_FILE}")
+          FULL_IMAGE=$(jq -r '.full_image' "${INFO_FILE}")
+          COMMIT_SHA=$(jq -r '.commit_sha' "${INFO_FILE}")
+          BUILD_TIME=$(jq -r '.build_time' "${INFO_FILE}")
+          SOURCE_BRANCH=$(jq -r '.source_branch' "${INFO_FILE}")
+          ALL_TAGS=$(jq -r '.all_tags' "${INFO_FILE}")
           
+          # Validar que los valores no sean null
+          if [[ "${IMAGE_TAG}" == "null" ]] || [[ -z "${IMAGE_TAG}" ]]; then
+            echo "❌ ERROR: image_tag is null or empty in the JSON file"
+            exit 1
+          fi
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 EXTRACTED IMAGE INFORMATION"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🐳 Docker Image: ${DOCKER_IMAGE}"
+          echo "☁️  GCP Project: ${GCP_PROJECT_ID}"
+          echo "📍 GCP Region: ${GCP_REGION}"
+          echo "📦 Artifact Registry: ${ARTIFACT_REGISTRY}"
+          echo "🏷️  Image Tag (PRIMARY): ${IMAGE_TAG}"
+          echo "🔗 Full Image URL: ${FULL_IMAGE}"
+          echo "📌 Commit SHA: ${COMMIT_SHA}"
+          echo "🕐 Build Time: ${BUILD_TIME}"
+          echo "🌿 Source Branch: ${SOURCE_BRANCH}"
+          echo "📋 All Tags: ${ALL_TAGS}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
           # Exportar como outputs
@@ -225,8 +132,12 @@ jobs:
           echo "gcp_region=${GCP_REGION}" >> $GITHUB_OUTPUT
           echo "artifact_registry=${ARTIFACT_REGISTRY}" >> $GITHUB_OUTPUT
           echo "tag_qa=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-          echo "full_image_url=${FULL_IMAGE_URL}" >> $GITHUB_OUTPUT
-
+          echo "full_image_url=${FULL_IMAGE}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "all_tags=${ALL_TAGS}" >> $GITHUB_OUTPUT
+          
+          echo ""
+          echo "✅ Image information extracted and validated successfully"
   # ───────────────────────────────────────────────────────────
   # Job 3: Deployment QA
   # ───────────────────────────────────────────────────────────
