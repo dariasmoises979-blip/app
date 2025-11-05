@@ -112,6 +112,7 @@ jobs:
     name: 💾 Save Image Info to Feature Branch
     needs: build-image
     runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')
     steps:
       - name: 📦 Checkout feature branch
         uses: actions/checkout@v4
@@ -128,16 +129,13 @@ jobs:
           echo "📍 Current branch: ${{ github.ref_name }}"
           echo ""
           
-          # Crear directorio si no existe
           mkdir -p .github/deployment-info
           
-          # USAR LOS OUTPUTS DEL JOB build-image
           IMAGE_TAG="${{ needs.build-image.outputs.image_tag }}"
           FULL_IMAGE="${{ needs.build-image.outputs.full_image }}"
           SHORT_SHA="${{ needs.build-image.outputs.short_sha }}"
           ALL_TAGS="${{ needs.build-image.outputs.all_tags }}"
           
-          # Crear archivo JSON con la información REAL del build
           cat > .github/deployment-info/qa-image-info.json << EOF
           {
             "docker_image": "mi-aplicacion",
@@ -172,17 +170,17 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+            
           git add .github/deployment-info/qa-image-info.json
-          
+           
           if git diff --staged --quiet; then
             echo "⏭️  No changes to commit"
           else
-            git commit -m "🐳 Add QA image info - ${{ needs.build-image.outputs.image_tag }}" \
+            git commit -m "[skip ci] 🐳 Add QA image info - ${{ needs.build-image.outputs.image_tag }}" \
               -m "Image: ${{ needs.build-image.outputs.full_image }}" \
               -m "Commit: ${{ needs.build-image.outputs.short_sha }}" \
               -m "Triggered by: ${{ github.actor }}"
-            
+              
             git push origin ${{ github.ref_name }}
             echo "✅ Image info committed to ${{ github.ref_name }}"
             echo "📌 This file will be merged to dev, and then to main through the PR process"
@@ -195,6 +193,7 @@ jobs:
     name: 📤 Copy Image Info to Current Branch
     needs: save-image-info
     runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
     steps:
       - name: 📦 Checkout dev branch
         uses: actions/checkout@v4
