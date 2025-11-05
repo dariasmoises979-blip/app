@@ -191,66 +191,66 @@ jobs:
   # ───────────────────────────────────────────────────────────
   # Job NUEVO: Copiar archivo a main después del merge a dev
   # ───────────────────────────────────────────────────────────
-copy-to-branch:
-  name: 📤 Copy Image Info to Current Branch
-  needs: save-image-info
-  runs-on: ubuntu-latest
-  steps:
-    - name: 📦 Checkout dev branch
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GH_TOKEN2 }}
-        ref: dev
-        fetch-depth: 0
+  copy-to-branch:
+    name: 📤 Copy Image Info to Current Branch
+    needs: save-image-info
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📦 Checkout dev branch
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN2 }}
+          ref: dev
+          fetch-depth: 0
 
-    - name: 🔍 Verify file exists in dev
-      id: check-file
-      run: |
-        if [ -f ".github/deployment-info/qa-image-info.json" ]; then
-          echo "✅ Image info file found in dev branch"
-          echo "file_exists=true" >> $GITHUB_OUTPUT
-          cat .github/deployment-info/qa-image-info.json | jq '.'
-        else
-          echo "⚠️  Image info file not found in dev branch"
-          echo "file_exists=false" >> $GITHUB_OUTPUT
-        fi
+      - name: 🔍 Verify file exists in dev
+        id: check-file
+        run: |
+          if [ -f ".github/deployment-info/qa-image-info.json" ]; then
+            echo "✅ Image info file found in dev branch"
+            echo "file_exists=true" >> $GITHUB_OUTPUT
+            cat .github/deployment-info/qa-image-info.json | jq '.'
+          else
+            echo "⚠️  Image info file not found in dev branch"
+            echo "file_exists=false" >> $GITHUB_OUTPUT
+          fi
 
-    - name: 📤 Copy file to current branch
-      if: steps.check-file.outputs.file_exists == 'true'
-      run: |
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "📤 COPYING IMAGE INFO TO CURRENT BRANCH"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        
-        IMAGE_INFO=$(cat .github/deployment-info/qa-image-info.json)
-        mkdir -p .github/deployment-info
-        echo "${IMAGE_INFO}" > .github/deployment-info/qa-image-info.json
-        
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        
-        git add .github/deployment-info/qa-image-info.json
-        
-        if git diff --staged --quiet; then
-          echo "⏭️  No changes to commit in current branch"
-        else
-          IMAGE_TAG=$(echo "${IMAGE_INFO}" | jq -r '.image_tag')
-          FULL_IMAGE=$(echo "${IMAGE_INFO}" | jq -r '.full_image')
+      - name: 📤 Copy file to current branch
+        if: steps.check-file.outputs.file_exists == 'true'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📤 COPYING IMAGE INFO TO CURRENT BRANCH"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          git commit -m "🐳 Update QA image info - ${IMAGE_TAG}" \
-            -m "Image: ${FULL_IMAGE}" \
-            -m "Branch: ${{ github.ref_name }}" \
-            -m "Triggered by: ${{ github.actor }}"
+          IMAGE_INFO=$(cat .github/deployment-info/qa-image-info.json)
+          mkdir -p .github/deployment-info
+          echo "${IMAGE_INFO}" > .github/deployment-info/qa-image-info.json
           
-          git push origin ${{ github.ref_name }}
-          echo "✅ Image info pushed to current branch"
-          echo ""
-          echo "📊 File location: .github/deployment-info/qa-image-info.json"
-          echo "🌿 Branch: ${{ github.ref_name }}"
-        fi
-        
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-             
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add .github/deployment-info/qa-image-info.json
+          
+          if git diff --staged --quiet; then
+            echo "⏭️  No changes to commit in current branch"
+          else
+            IMAGE_TAG=$(echo "${IMAGE_INFO}" | jq -r '.image_tag')
+            FULL_IMAGE=$(echo "${IMAGE_INFO}" | jq -r '.full_image')
+            
+            git commit -m "🐳 Update QA image info - ${IMAGE_TAG}" \
+              -m "Image: ${FULL_IMAGE}" \
+              -m "Branch: ${{ github.ref_name }}" \
+              -m "Triggered by: ${{ github.actor }}"
+            
+            git push origin ${{ github.ref_name }}
+            echo "✅ Image info pushed to current branch"
+            echo ""
+            echo "📊 File location: .github/deployment-info/qa-image-info.json"
+            echo "🌿 Branch: ${{ github.ref_name }}"
+          fi
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              
 
   # ───────────────────────────────────────────────────────────
   # Job FINAL: Resumen completo del workflow
