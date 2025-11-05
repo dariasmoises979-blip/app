@@ -150,7 +150,7 @@ jobs:
             "commit_sha": "${{ github.sha }}",
             "commit_sha_short": "${SHORT_SHA}",
             "all_tags": "${ALL_TAGS}",
-            "build_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ)",
+            "build_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
             "source_branch": "${{ github.ref_name }}",
             "triggered_by": "${{ github.actor }}",
             "workflow_run_id": "${{ github.run_id }}"
