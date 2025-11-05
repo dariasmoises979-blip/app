@@ -194,3 +194,136 @@ jobs:
       - name: Hola Mundo
         run: |
           echo "¡Hola Mundo!"
+
+# ───────────────────────────────────────────────────────────
+  # Job FINAL: Resumen completo del workflow QA
+  # ───────────────────────────────────────────────────────────
+  workflow-summary:
+    name: 📊 QA Workflow Summary
+    needs: [test, get-image-info, deploy-qa, create-pr-to-integration, saludar, saludar-2]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate QA Workflow Summary
+        run: |
+          echo "# 🚀 QA Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Workflow Execution Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Status de cada job
+          echo "| Job | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 QA Tests | ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }} | Quality Assurance Tests |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Get Image Info | ${{ needs.get-image-info.result == 'success' && '✅ Retrieved' || '❌ Failed' }} | Read image metadata |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚀 Deploy to QA | ${{ needs.deploy-qa.result == 'success' && '✅ Deployed' || needs.deploy-qa.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | Update K8s manifests |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📝 Create PR | ${{ needs.create-pr-to-integration.result == 'success' && '✅ Created' || '❌ Failed' }} | QA → Integration |" >> $GITHUB_STEP_SUMMARY
+          echo "| 👋 Manual Approval 1 | ${{ needs.saludar.result == 'success' && '✅ Approved' || needs.saludar.result == 'skipped' && '⏭️ Skipped' || '⏸️ Pending' }} | Environment: qa |" >> $GITHUB_STEP_SUMMARY
+          echo "| 👋 Manual Approval 2 | ${{ needs.saludar-2.result == 'success' && '✅ Approved' || needs.saludar-2.result == 'skipped' && '⏭️ Skipped' || '⏸️ Pending' }} | Environment: qa |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Información de la imagen desplegada
+          if [[ "${{ needs.get-image-info.result }}" == "success" ]]; then
+            echo "## 🐳 Deployed Image Information" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| **Image Name** | \`${{ needs.get-image-info.outputs.docker_image }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Image Tag** | \`${{ needs.get-image-info.outputs.tag_qa }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Full Image URL** | \`${{ needs.get-image-info.outputs.full_image_url }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Source Commit** | \`${{ needs.get-image-info.outputs.commit_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Environment** | \`qa\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **GCP Project** | \`${{ needs.get-image-info.outputs.gcp_project_id }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Registry** | \`${{ needs.get-image-info.outputs.gcp_region }}-docker.pkg.dev/${{ needs.get-image-info.outputs.gcp_project_id }}/${{ needs.get-image-info.outputs.artifact_registry }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            if [[ -n "${{ needs.get-image-info.outputs.all_tags }}" ]] && [[ "${{ needs.get-image-info.outputs.all_tags }}" != "null" ]]; then
+              echo "### 🏷️ All Available Tags" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "\`${{ needs.get-image-info.outputs.all_tags }}\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+          
+          # Deployment details
+          if [[ "${{ needs.deploy-qa.result }}" == "success" ]]; then
+            echo "## 📝 Deployment Details" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Resource | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| **Target Repository** | \`dariasmoises979-blip/pipeline-build\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Kubernetes Manifests** | Updated in \`kubernetes/qa/${{ github.event.repository.name }}/\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Helm Values** | Updated in \`helm/override/qa/\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Target Branch** | \`main\` |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            echo "### 🔗 Quick Access" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- [View Manifests Repo](https://github.com/dariasmoises979-blip/pipeline-build)" >> $GITHUB_STEP_SUMMARY
+            echo "- [View in GCP Console](https://console.cloud.google.com/artifacts/docker/${{ needs.get-image-info.outputs.gcp_project_id }}/${{ needs.get-image-info.outputs.gcp_region }}/${{ needs.get-image-info.outputs.artifact_registry }}/${{ needs.get-image-info.outputs.docker_image }})" >> $GITHUB_STEP_SUMMARY
+            echo "- Workflow Run: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Verificación de la imagen
+          if [[ "${{ needs.get-image-info.result }}" == "success" ]]; then
+            echo "## 🔍 Verify Deployment" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "# Check Kubernetes manifests" >> $GITHUB_STEP_SUMMARY
+            echo "kubectl get pods -n qa -l app=${{ needs.get-image-info.outputs.docker_image }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "# Describe deployment" >> $GITHUB_STEP_SUMMARY
+            echo "kubectl describe deployment ${{ needs.get-image-info.outputs.docker_image }} -n qa" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "# Check image in use" >> $GITHUB_STEP_SUMMARY
+            echo "kubectl get deployment ${{ needs.get-image-info.outputs.docker_image }} -n qa -o jsonpath='{.spec.template.spec.containers[0].image}'" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Metadata del workflow
+          echo "## 📋 Workflow Metadata" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered By** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Timestamp** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Repository** | ${{ github.repository }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Next steps
+          echo "## 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.deploy-qa.result }}" == "success" ]]; then
+            echo "### ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "1. 🎉 **Manifests Updated**: Kubernetes and Helm manifests have been updated with image \`${{ needs.get-image-info.outputs.tag_qa }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "2. 📝 **PR Created**: Pull request from \`qa\` to \`integration\` is ready for review" >> $GITHUB_STEP_SUMMARY
+            echo "3. 🔍 **Verify Deployment**: Check your K8s cluster to ensure pods are running with the new image" >> $GITHUB_STEP_SUMMARY
+            echo "4. ✅ **Manual Approvals**: Complete manual approval steps if required" >> $GITHUB_STEP_SUMMARY
+            echo "5. 🚀 **Next Environment**: After approval, merge the PR to deploy to Integration" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.get-image-info.result }}" == "failure" ]]; then
+            echo "### ⚠️ Image Info Retrieval Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Possible causes:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Image info file not found in \`.github/deployment-info/qa-image-info.json\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Feature workflow did not complete successfully" >> $GITHUB_STEP_SUMMARY
+            echo "- \`save-image-info\` job failed in feature workflow" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Action required:**" >> $GITHUB_STEP_SUMMARY
+            echo "1. Check the feature workflow logs" >> $GITHUB_STEP_SUMMARY
+            echo "2. Ensure the image was built successfully" >> $GITHUB_STEP_SUMMARY
+            echo "3. Verify the image info file was committed to \`main\` branch" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Some Steps Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please review the workflow logs to identify and fix issues." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "_Generated by QA Workflow - $(date -u +'%Y-%m-%d %H:%M:%S UTC')_" >> $GITHUB_STEP_SUMMARY
