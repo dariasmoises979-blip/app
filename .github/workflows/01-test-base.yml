@@ -64,28 +64,6 @@ jobs:
           echo "-----------------------------------------"
           echo "✅ Análisis de queries completado exitosamente."
 
-  merge-to-dev:
-    name: Merge to Dev
-    needs: copy-to-branch
-    if: startsWith(github.ref_name, 'feature/') && success()
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main
-    with:
-      source_branch: ${{ github.ref_name }}
-      target_branch: 'dev'
-      use_fast_forward: false
-      merge_message: '🔀 Auto-merge from ${{ github.ref_name }} after successful tests'
-
-  create-pr-to-integration:
-    name: Create PR to Integration
-    needs: merge-to-dev
-    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
-    with:
-      source_branch: 'dev'
-      target_branch: 'qa'
-      pr_title: '🚀 Deploy DEV to QA'
-      environment: 'qa'
-      labels: 'automated,deployment,qa,dev'
-
   build-image:
     name: Build Docker Image
     needs: test
@@ -106,37 +84,27 @@ jobs:
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
 
   # ───────────────────────────────────────────────────────────
-  # Job NUEVO: Guardar información de la imagen en la rama feature
+  # Job: Guardar información de la imagen en CACHE
   # ───────────────────────────────────────────────────────────
-  save-image-info:
-    name: 💾 Save Image Info to Feature Branch
+  save-image-info-cache:
+    name: 💾 Save Image Info to Cache
     needs: build-image
     runs-on: ubuntu-latest
-    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')
     steps:
-      - name: 📦 Checkout feature branch
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GH_TOKEN2 }}
-          ref: ${{ github.ref_name }}  # ← Usar la rama feature actual
-          fetch-depth: 0
-
-      - name: 📝 Create image info file in feature branch
+      - name: 📝 Create image info file
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "💾 SAVING IMAGE INFORMATION TO FEATURE BRANCH"
+          echo "💾 SAVING IMAGE INFORMATION TO CACHE"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📍 Current branch: ${{ github.ref_name }}"
-          echo ""
           
-          mkdir -p .github/deployment-info
+          mkdir -p /tmp/image-info
           
           IMAGE_TAG="${{ needs.build-image.outputs.image_tag }}"
           FULL_IMAGE="${{ needs.build-image.outputs.full_image }}"
           SHORT_SHA="${{ needs.build-image.outputs.short_sha }}"
           ALL_TAGS="${{ needs.build-image.outputs.all_tags }}"
           
-          cat > .github/deployment-info/qa-image-info.json << EOF
+          cat > /tmp/image-info/qa-image-info.json << EOF
           {
             "docker_image": "mi-aplicacion",
             "gcp_project_id": "elite-ceremony-476307-s9",
@@ -155,108 +123,70 @@ jobs:
           }
           EOF
           
-          echo "✅ Image info file created with REAL build outputs:"
-          cat .github/deployment-info/qa-image-info.json | jq '.'
+          echo "✅ Image info file created:"
+          cat /tmp/image-info/qa-image-info.json | jq '.'
           echo ""
           echo "📊 Summary:"
           echo "   Primary Tag: ${IMAGE_TAG}"
           echo "   Full Image: ${FULL_IMAGE}"
           echo "   Short SHA: ${SHORT_SHA}"
-          echo "   All Tags: ${ALL_TAGS}"
-          echo "   Saving to branch: ${{ github.ref_name }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: 💾 Commit to feature branch
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            
-          git add .github/deployment-info/qa-image-info.json
-           
-          if git diff --staged --quiet; then
-            echo "⏭️  No changes to commit"
-          else
-            git commit -m "[skip ci] 🐳 Add QA image info - ${{ needs.build-image.outputs.image_tag }}" \
-              -m "Image: ${{ needs.build-image.outputs.full_image }}" \
-              -m "Commit: ${{ needs.build-image.outputs.short_sha }}" \
-              -m "Triggered by: ${{ github.actor }}"
-              
-            git push origin ${{ github.ref_name }}
-            echo "✅ Image info committed to ${{ github.ref_name }}"
-            echo "📌 This file will be merged to dev, and then to main through the PR process"
-          fi
-
-  # ───────────────────────────────────────────────────────────
-  # Job NUEVO: Copiar archivo a main después del merge a dev
-  # ───────────────────────────────────────────────────────────
-  copy-to-branch:
-    name: 📤 Copy Image Info to Current Branch
-    needs: save-image-info
-    runs-on: ubuntu-latest
-    if: github.actor != 'github-actions[bot]'
-    steps:
-      - name: 📦 Checkout dev branch
-        uses: actions/checkout@v4
+      - name: 💾 Save to GitHub Cache
+        uses: actions/cache/save@v3
         with:
-          token: ${{ secrets.GH_TOKEN2 }}
-          ref: dev
-          fetch-depth: 0
-
-      - name: 🔍 Verify file exists in dev
-        id: check-file
+          path: /tmp/image-info
+          key: image-info-${{ github.sha }}-${{ github.run_id }}
+          
+      - name: 📢 Output cache key
         run: |
-          if [ -f ".github/deployment-info/qa-image-info.json" ]; then
-            echo "✅ Image info file found in dev branch"
-            echo "file_exists=true" >> $GITHUB_OUTPUT
-            cat .github/deployment-info/qa-image-info.json | jq '.'
-          else
-            echo "⚠️  Image info file not found in dev branch"
-            echo "file_exists=false" >> $GITHUB_OUTPUT
-          fi
+          echo "🔑 Cache Key: image-info-${{ github.sha }}-${{ github.run_id }}"
+          echo "📦 This key will be used in QA workflow to retrieve image info"
 
-      - name: 📤 Copy file to current branch
-        if: steps.check-file.outputs.file_exists == 'true'
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📤 COPYING IMAGE INFO TO CURRENT BRANCH"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          IMAGE_INFO=$(cat .github/deployment-info/qa-image-info.json)
-          mkdir -p .github/deployment-info
-          echo "${IMAGE_INFO}" > .github/deployment-info/qa-image-info.json
-          
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add .github/deployment-info/qa-image-info.json
-          
-          if git diff --staged --quiet; then
-            echo "⏭️  No changes to commit in current branch"
-          else
-            IMAGE_TAG=$(echo "${IMAGE_INFO}" | jq -r '.image_tag')
-            FULL_IMAGE=$(echo "${IMAGE_INFO}" | jq -r '.full_image')
-            
-            git commit -m "🐳 Update QA image info - ${IMAGE_TAG}" \
-              -m "Image: ${FULL_IMAGE}" \
-              -m "Branch: ${{ github.ref_name }}" \
-              -m "Triggered by: ${{ github.actor }}"
-            
-            git push origin ${{ github.ref_name }}
-            echo "✅ Image info pushed to current branch"
-            echo ""
-            echo "📊 File location: .github/deployment-info/qa-image-info.json"
-            echo "🌿 Branch: ${{ github.ref_name }}"
-          fi
-          
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-              
+  merge-to-dev:
+    name: Merge to Dev
+    needs: [test, build-image, save-image-info-cache]
+    if: startsWith(github.ref_name, 'feature/') && success()
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main
+    with:
+      source_branch: ${{ github.ref_name }}
+      target_branch: 'dev'
+      use_fast_forward: false
+      merge_message: '🔀 Auto-merge from ${{ github.ref_name }} after successful tests'
+
+  create-pr-to-integration:
+    name: Create PR to QA
+    needs: merge-to-dev
+    uses: dariasmoises979-blip/pipeline-build/.github/workflows/pull-request.yml@main
+    with:
+      source_branch: 'dev'
+      target_branch: 'qa'
+      pr_title: '🚀 Deploy DEV to QA - SHA: ${{ github.sha }}'
+      environment: 'qa'
+      labels: 'automated,deployment,qa,dev'
+      pr_body: |
+        ## 🚀 Deployment Information
+        
+        **Source Branch:** `${{ github.ref_name }}`
+        **Commit SHA:** `${{ github.sha }}`
+        **Build Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+        
+        ### 🐳 Docker Image
+        - **Image:** `${{ needs.build-image.outputs.full_image }}`
+        - **Tag:** `${{ needs.build-image.outputs.image_tag }}`
+        
+        ### 🔑 Cache Information
+        To retrieve image info in QA workflow, use:
+        ```
+        cache_key: image-info-${{ github.sha }}-${{ github.run_id }}
+        ```
 
   # ───────────────────────────────────────────────────────────
   # Job FINAL: Resumen completo del workflow
   # ───────────────────────────────────────────────────────────
   workflow-summary:
     name: 📊 Workflow Summary
-    needs: [test, analyze-queries, merge-to-dev, create-pr-to-integration, build-image, save-image-info]
+    needs: [test, analyze-queries, build-image, save-image-info-cache, merge-to-dev, create-pr-to-integration]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -272,10 +202,10 @@ jobs:
           echo "|-----|--------|---------|" >> $GITHUB_STEP_SUMMARY
           echo "| 🧪 Tests | ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }} | Unit & Integration Tests |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔍 Query Analysis | ${{ needs.analyze-queries.result == 'success' && '✅ Completed' || '❌ Failed' }} | SQL Performance Analysis |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🐳 Build Image | ${{ needs.build-image.result == 'success' && '✅ Built' || '❌ Failed' }} | Docker Image |" >> $GITHUB_STEP_SUMMARY
+          echo "| 💾 Save to Cache | ${{ needs.save-image-info-cache.result == 'success' && '✅ Saved' || '❌ Failed' }} | Image Metadata |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔀 Merge to Dev | ${{ needs.merge-to-dev.result == 'success' && '✅ Merged' || '❌ Failed' }} | Feature → Dev |" >> $GITHUB_STEP_SUMMARY
           echo "| 📝 Create PR | ${{ needs.create-pr-to-integration.result == 'success' && '✅ Created' || '❌ Failed' }} | Dev → QA |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🐳 Build Image | ${{ needs.build-image.result == 'success' && '✅ Built' || '❌ Failed' }} | Docker Image |" >> $GITHUB_STEP_SUMMARY
-          echo "| 💾 Save Info | ${{ needs.save-image-info.result == 'success' && '✅ Saved' || '❌ Failed' }} | Image Metadata |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Información de la imagen construida
@@ -290,24 +220,16 @@ jobs:
             echo "| **Commit SHA** | \`${{ needs.build-image.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
             echo "| **All Tags** | \`${{ needs.build-image.outputs.all_tags }}\` |" >> $GITHUB_STEP_SUMMARY
             echo "| **Environment** | \`qa\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Registry** | \`us-central1-docker.pkg.dev/elite-ceremony-476307-s9/dariasmoises979\` |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
-            echo "### 🔗 Quick Access" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔑 Cache Information" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- [View in GCP Console](https://console.cloud.google.com/artifacts/docker/elite-ceremony-476307-s9/us-central1/dariasmoises979/mi-aplicacion)" >> $GITHUB_STEP_SUMMARY
-            echo "- Workflow Run: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            
-            echo "### 📦 Pull Commands" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo '```bash' >> $GITHUB_STEP_SUMMARY
-            echo "# Configure Docker for GCP" >> $GITHUB_STEP_SUMMARY
-            echo "gcloud auth configure-docker us-central1-docker.pkg.dev" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "# Pull the image" >> $GITHUB_STEP_SUMMARY
-            echo "docker pull ${{ needs.build-image.outputs.full_image }}" >> $GITHUB_STEP_SUMMARY
+            echo "Image metadata saved to GitHub Cache with key:" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "image-info-${{ github.sha }}-${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The QA workflow will automatically retrieve this information." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
           
@@ -319,21 +241,8 @@ jobs:
           echo "| **Source Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Triggered By** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Run ID** | \`${{ github.run_id }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Timestamp** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Repository** | ${{ github.repository }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Next steps
-          echo "## 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ needs.build-image.result }}" == "success" ]]; then
-            echo "1. ✅ **Image Ready**: The Docker image has been built and pushed to GCP Artifact Registry" >> $GITHUB_STEP_SUMMARY
-            echo "2. 📝 **PR Created**: A pull request from \`dev\` to \`qa\` has been created" >> $GITHUB_STEP_SUMMARY
-            echo "3. 💾 **Info Saved**: Image metadata saved to \`.github/deployment-info/qa-image-info.json\`" >> $GITHUB_STEP_SUMMARY
-            echo "4. 🚀 **Ready for QA**: Once the PR is merged, QA workflow will automatically deploy using tag \`${{ needs.build-image.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ **Action Required**: Some jobs failed. Please check the logs above." >> $GITHUB_STEP_SUMMARY
-          fi
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "---" >> $GITHUB_STEP_SUMMARY
@@ -350,3 +259,4 @@ jobs:
           echo "✅ Se demuestra que se puede modificar el workflow por proyecto sin afectar a otros proyectos."
           echo "🐳 Image built: ${{ needs.build-image.outputs.full_image }}"
           echo "🏷️  Tag: ${{ needs.build-image.outputs.image_tag }}"
+          echo "🔑 Cache key: image-info-${{ github.sha }}-${{ github.run_id }}"

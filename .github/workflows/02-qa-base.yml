@@ -1,4 +1,3 @@
-# 02-qa-base.yml
 permissions:
   actions: read
   contents: write
@@ -12,6 +11,15 @@ on:
     branches:
       - qa
   workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Commit SHA from feature workflow'
+        required: false
+        type: string
+      run_id:
+        description: 'Run ID from feature workflow'
+        required: false
+        type: string
 
 jobs:
   # ───────────────────────────────────────────────────────────
@@ -36,10 +44,10 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # ───────────────────────────────────────────────────────────
-  # Job 2: Leer información de la imagen desde el archivo guardado
+  # Job 2: Leer información de la imagen desde CACHE
   # ───────────────────────────────────────────────────────────
   get-image-info:
-    name: 📦 Get Image Info from Saved File
+    name: 📦 Get Image Info from Cache
     runs-on: ubuntu-latest
     needs: test
     outputs:
@@ -51,38 +59,116 @@ jobs:
       full_image_url: ${{ steps.read-info.outputs.full_image_url }}
       commit_sha: ${{ steps.read-info.outputs.commit_sha }}
       all_tags: ${{ steps.read-info.outputs.all_tags }}
+      source_branch: ${{ steps.read-info.outputs.source_branch }}
     
     steps:
       - name: 📦 Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: main
-          fetch-depth: 1
+          fetch-depth: 10  # Traer más commits para buscar el SHA correcto
 
-      - name: 📖 Read and validate image info file
+      - name: 🔍 Find commit SHA and run ID
+        id: find-sha
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔍 SEARCHING FOR FEATURE WORKFLOW INFORMATION"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Si se proporcionaron manualmente, usarlos
+          if [[ -n "${{ inputs.commit_sha }}" ]] && [[ -n "${{ inputs.run_id }}" ]]; then
+            COMMIT_SHA="${{ inputs.commit_sha }}"
+            RUN_ID="${{ inputs.run_id }}"
+            echo "✅ Using manually provided values:"
+            echo "   Commit SHA: ${COMMIT_SHA}"
+            echo "   Run ID: ${RUN_ID}"
+          else
+            # Buscar en el historio de commits (dev se mergeo a qa)
+            echo "🔎 Searching in git history..."
+            
+            # Buscar el commit más reciente que viene de dev
+            COMMIT_SHA=$(git log --grep="Auto-merge from feature/" --format="%H" -1 || git log --format="%H" -1)
+            
+            if [[ -z "${COMMIT_SHA}" ]]; then
+              echo "❌ Could not find commit SHA"
+              exit 1
+            fi
+            
+            echo "📌 Found commit SHA: ${COMMIT_SHA}"
+            
+            # Buscar el workflow run ID en GitHub API
+            echo "🔎 Searching for workflow run ID via GitHub API..."
+            
+            WORKFLOWS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/runs?per_page=20")
+            
+            # Buscar el run que corresponde a este commit
+            RUN_ID=$(echo "${WORKFLOWS}" | jq -r ".workflow_runs[] | select(.head_sha == \"${COMMIT_SHA}\") | select(.name == \"Run Unit Tests and Merge to Dev\") | .id" | head -1)
+            
+            if [[ -z "${RUN_ID}" ]] || [[ "${RUN_ID}" == "null" ]]; then
+              echo "⚠️  Could not find exact run ID, trying latest feature workflow..."
+              RUN_ID=$(echo "${WORKFLOWS}" | jq -r '.workflow_runs[] | select(.name == "Run Unit Tests and Merge to Dev") | .id' | head -1)
+            fi
+            
+            if [[ -z "${RUN_ID}" ]] || [[ "${RUN_ID}" == "null" ]]; then
+              echo "❌ Could not find workflow run ID"
+              exit 1
+            fi
+            
+            echo "📌 Found run ID: ${RUN_ID}"
+          fi
+          
+          echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "run_id=${RUN_ID}" >> $GITHUB_OUTPUT
+          echo "cache_key=image-info-${COMMIT_SHA}-${RUN_ID}" >> $GITHUB_OUTPUT
+          
+          echo ""
+          echo "🔑 Cache key: image-info-${COMMIT_SHA}-${RUN_ID}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: 📥 Restore from GitHub Cache
+        id: cache-restore
+        uses: actions/cache/restore@v3
+        with:
+          path: /tmp/image-info
+          key: ${{ steps.find-sha.outputs.cache_key }}
+          fail-on-cache-miss: false
+
+      - name: 📖 Read and validate image info
         id: read-info
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📖 READING IMAGE INFORMATION FROM SAVED FILE"
+          echo "📖 READING IMAGE INFORMATION FROM CACHE"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          INFO_FILE=".github/deployment-info/qa-image-info.json"
+          INFO_FILE="/tmp/image-info/qa-image-info.json"
           
-          # Verificar que el archivo existe
-          if [ ! -f "${INFO_FILE}" ]; then
-            echo "❌ ERROR: Image info file not found!"
-            echo "   Expected file: ${INFO_FILE}"
+          # Verificar que el cache se restauró correctamente
+          if [[ "${{ steps.cache-restore.outputs.cache-hit }}" != "true" ]]; then
+            echo "❌ ERROR: Cache not found!"
+            echo "   Cache key: ${{ steps.find-sha.outputs.cache_key }}"
             echo ""
             echo "💡 TROUBLESHOOTING:"
-            echo "   1. Verify the 'save-image-info' job ran successfully in feature workflow"
-            echo "   2. Check if the file was committed to the 'main' branch"
-            echo "   3. Ensure the feature workflow completed before merging to QA"
+            echo "   1. Verify the feature workflow completed successfully"
+            echo "   2. Check if 'save-image-info-cache' job ran in feature workflow"
+            echo "   3. Ensure the commit SHA and run ID are correct:"
+            echo "      - Commit SHA: ${{ steps.find-sha.outputs.commit_sha }}"
+            echo "      - Run ID: ${{ steps.find-sha.outputs.run_id }}"
             echo ""
-            echo "🔗 Feature workflow should have job: save-image-info"
+            echo "🔗 You can also trigger this workflow manually with:"
+            echo "   commit_sha: <sha-from-feature-workflow>"
+            echo "   run_id: <run-id-from-feature-workflow>"
             echo ""
             exit 1
           fi
           
+          # Verificar que el archivo existe
+          if [ ! -f "${INFO_FILE}" ]; then
+            echo "❌ ERROR: Image info file not found in cache!"
+            echo "   Expected file: ${INFO_FILE}"
+            exit 1
+          fi
+          
+          echo "✅ Cache restored successfully"
           echo "✅ Image info file found: ${INFO_FILE}"
           echo ""
           echo "📄 File content:"
@@ -135,9 +221,11 @@ jobs:
           echo "full_image_url=${FULL_IMAGE}" >> $GITHUB_OUTPUT
           echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
           echo "all_tags=${ALL_TAGS}" >> $GITHUB_OUTPUT
+          echo "source_branch=${SOURCE_BRANCH}" >> $GITHUB_OUTPUT
           
           echo ""
           echo "✅ Image information extracted and validated successfully"
+
   # ───────────────────────────────────────────────────────────
   # Job 3: Deployment QA
   # ───────────────────────────────────────────────────────────
@@ -195,7 +283,7 @@ jobs:
         run: |
           echo "¡Hola Mundo!"
 
-# ───────────────────────────────────────────────────────────
+  # ───────────────────────────────────────────────────────────
   # Job FINAL: Resumen completo del workflow QA
   # ───────────────────────────────────────────────────────────
   workflow-summary:
@@ -215,7 +303,7 @@ jobs:
           echo "| Job | Status | Details |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|---------|" >> $GITHUB_STEP_SUMMARY
           echo "| 🧪 QA Tests | ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }} | Quality Assurance Tests |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📦 Get Image Info | ${{ needs.get-image-info.result == 'success' && '✅ Retrieved' || '❌ Failed' }} | Read image metadata |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Get Image Info | ${{ needs.get-image-info.result == 'success' && '✅ Retrieved' || '❌ Failed' }} | Read from Cache |" >> $GITHUB_STEP_SUMMARY
           echo "| 🚀 Deploy to QA | ${{ needs.deploy-qa.result == 'success' && '✅ Deployed' || needs.deploy-qa.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | Update K8s manifests |" >> $GITHUB_STEP_SUMMARY
           echo "| 📝 Create PR | ${{ needs.create-pr-to-integration.result == 'success' && '✅ Created' || '❌ Failed' }} | QA → Integration |" >> $GITHUB_STEP_SUMMARY
           echo "| 👋 Manual Approval 1 | ${{ needs.saludar.result == 'success' && '✅ Approved' || needs.saludar.result == 'skipped' && '⏭️ Skipped' || '⏸️ Pending' }} | Environment: qa |" >> $GITHUB_STEP_SUMMARY
@@ -232,9 +320,9 @@ jobs:
             echo "| **Image Tag** | \`${{ needs.get-image-info.outputs.tag_qa }}\` |" >> $GITHUB_STEP_SUMMARY
             echo "| **Full Image URL** | \`${{ needs.get-image-info.outputs.full_image_url }}\` |" >> $GITHUB_STEP_SUMMARY
             echo "| **Source Commit** | \`${{ needs.get-image-info.outputs.commit_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Source Branch** | \`${{ needs.get-image-info.outputs.source_branch }}\` |" >> $GITHUB_STEP_SUMMARY
             echo "| **Environment** | \`qa\` |" >> $GITHUB_STEP_SUMMARY
             echo "| **GCP Project** | \`${{ needs.get-image-info.outputs.gcp_project_id }}\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Registry** | \`${{ needs.get-image-info.outputs.gcp_region }}-docker.pkg.dev/${{ needs.get-image-info.outputs.gcp_project_id }}/${{ needs.get-image-info.outputs.artifact_registry }}\` |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
             if [[ -n "${{ needs.get-image-info.outputs.all_tags }}" ]] && [[ "${{ needs.get-image-info.outputs.all_tags }}" != "null" ]]; then
@@ -243,42 +331,10 @@ jobs:
               echo "\`${{ needs.get-image-info.outputs.all_tags }}\`" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
             fi
-          fi
-          
-          # Deployment details
-          if [[ "${{ needs.deploy-qa.result }}" == "success" ]]; then
-            echo "## 📝 Deployment Details" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| Resource | Status |" >> $GITHUB_STEP_SUMMARY
-            echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-            echo "| **Target Repository** | \`dariasmoises979-blip/pipeline-build\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Kubernetes Manifests** | Updated in \`kubernetes/qa/${{ github.event.repository.name }}/\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Helm Values** | Updated in \`helm/override/qa/\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Target Branch** | \`main\` |" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
             
-            echo "### 🔗 Quick Access" >> $GITHUB_STEP_SUMMARY
+            echo "### 📦 Cache Information" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- [View Manifests Repo](https://github.com/dariasmoises979-blip/pipeline-build)" >> $GITHUB_STEP_SUMMARY
-            echo "- [View in GCP Console](https://console.cloud.google.com/artifacts/docker/${{ needs.get-image-info.outputs.gcp_project_id }}/${{ needs.get-image-info.outputs.gcp_region }}/${{ needs.get-image-info.outputs.artifact_registry }}/${{ needs.get-image-info.outputs.docker_image }})" >> $GITHUB_STEP_SUMMARY
-            echo "- Workflow Run: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Verificación de la imagen
-          if [[ "${{ needs.get-image-info.result }}" == "success" ]]; then
-            echo "## 🔍 Verify Deployment" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo '```bash' >> $GITHUB_STEP_SUMMARY
-            echo "# Check Kubernetes manifests" >> $GITHUB_STEP_SUMMARY
-            echo "kubectl get pods -n qa -l app=${{ needs.get-image-info.outputs.docker_image }}" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "# Describe deployment" >> $GITHUB_STEP_SUMMARY
-            echo "kubectl describe deployment ${{ needs.get-image-info.outputs.docker_image }} -n qa" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "# Check image in use" >> $GITHUB_STEP_SUMMARY
-            echo "kubectl get deployment ${{ needs.get-image-info.outputs.docker_image }} -n qa -o jsonpath='{.spec.template.spec.containers[0].image}'" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "✅ Image metadata retrieved from GitHub Cache" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
           
@@ -291,7 +347,6 @@ jobs:
           echo "| **Triggered By** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Timestamp** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Repository** | ${{ github.repository }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Next steps
@@ -299,29 +354,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [[ "${{ needs.deploy-qa.result }}" == "success" ]]; then
-            echo "### ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "1. 🎉 **Manifests Updated**: Kubernetes and Helm manifests have been updated with image \`${{ needs.get-image-info.outputs.tag_qa }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "2. 📝 **PR Created**: Pull request from \`qa\` to \`integration\` is ready for review" >> $GITHUB_STEP_SUMMARY
-            echo "3. 🔍 **Verify Deployment**: Check your K8s cluster to ensure pods are running with the new image" >> $GITHUB_STEP_SUMMARY
-            echo "4. ✅ **Manual Approvals**: Complete manual approval steps if required" >> $GITHUB_STEP_SUMMARY
-            echo "5. 🚀 **Next Environment**: After approval, merge the PR to deploy to Integration" >> $GITHUB_STEP_SUMMARY
-          elif [[ "${{ needs.get-image-info.result }}" == "failure" ]]; then
-            echo "### ⚠️ Image Info Retrieval Failed" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Possible causes:**" >> $GITHUB_STEP_SUMMARY
-            echo "- Image info file not found in \`.github/deployment-info/qa-image-info.json\`" >> $GITHUB_STEP_SUMMARY
-            echo "- Feature workflow did not complete successfully" >> $GITHUB_STEP_SUMMARY
-            echo "- \`save-image-info\` job failed in feature workflow" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Action required:**" >> $GITHUB_STEP_SUMMARY
-            echo "1. Check the feature workflow logs" >> $GITHUB_STEP_SUMMARY
-            echo "2. Ensure the image was built successfully" >> $GITHUB_STEP_SUMMARY
-            echo "3. Verify the image info file was committed to \`main\` branch" >> $GITHUB_STEP_SUMMARY
+            echo "1. ✅ **Deployment Completed**: Kubernetes manifests updated with image \`${{ needs.get-image-info.outputs.tag_qa }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "2. 📝 **PR Created**: Pull request to Integration ready for review" >> $GITHUB_STEP_SUMMARY
+            echo "3. ✅ **Manual Approvals**: Complete approval steps if needed" >> $GITHUB_STEP_SUMMARY
+            echo "4. 🚀 **Next**: Merge PR to deploy to Integration environment" >> $GITHUB_STEP_SUMMARY
           else
-            echo "### ⚠️ Some Steps Failed" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Please review the workflow logs to identify and fix issues." >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ Please review the logs to identify and resolve issues." >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           
