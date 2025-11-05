@@ -146,7 +146,7 @@ jobs:
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/deployment-qa.yml@main
     with:
       project_name: ${{ github.event.repository.name }}
-      docker_image: ${{ needs.build-image.outputs.docker_image }}
+      docker_image: mi-aplicacion
       gcp_project_id: elite-ceremony-476307-s9
       gcp_region: us-central1
       artifact_registry: dariasmoises979
