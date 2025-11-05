@@ -66,7 +66,7 @@ jobs:
 
   merge-to-dev:
     name: Merge to Dev
-    needs: test
+    needs: save-image-info
     if: startsWith(github.ref_name, 'feature/') && success()
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main
     with:
@@ -88,7 +88,7 @@ jobs:
 
   build-image:
     name: Build Docker Image
-    needs: create-pr-to-integration
+    needs: test
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-gcp.yml@main
     with:
       docker_image: mi-aplicacion
@@ -150,7 +150,7 @@ jobs:
             "commit_sha": "${{ github.sha }}",
             "commit_sha_short": "${SHORT_SHA}",
             "all_tags": "${ALL_TAGS}",
-            "build_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ)",
+            "build_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
             "source_branch": "${{ github.ref_name }}",
             "triggered_by": "${{ github.actor }}",
             "workflow_run_id": "${{ github.run_id }}"
@@ -191,9 +191,9 @@ jobs:
   # ───────────────────────────────────────────────────────────
   # Job NUEVO: Copiar archivo a main después del merge a dev
   # ───────────────────────────────────────────────────────────
-  copy-to-main:
+  copy-to-branch:
     name: 📤 Copy Image Info to Main
-    needs: [merge-to-dev, save-image-info]
+    needs: save-image-info
     runs-on: ubuntu-latest
     steps:
       - name: 📦 Checkout dev branch
@@ -215,53 +215,49 @@ jobs:
             echo "file_exists=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: 📤 Copy file to main branch
-        if: steps.check-file.outputs.file_exists == 'true'
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📤 COPYING IMAGE INFO TO MAIN BRANCH"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          # Guardar el contenido del archivo
-          IMAGE_INFO=$(cat .github/deployment-info/qa-image-info.json)
-          
-          # Cambiar a main
-          git fetch origin main
-          git checkout main
-          
-          # Crear directorio si no existe
-          mkdir -p .github/deployment-info
-          
-          # Escribir el archivo
-          echo "${IMAGE_INFO}" > .github/deployment-info/qa-image-info.json
-          
-          # Configurar git
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Commit y push
-          git add .github/deployment-info/qa-image-info.json
-          
-          if git diff --staged --quiet; then
-            echo "⏭️  No changes to commit to main"
-          else
-            IMAGE_TAG=$(echo "${IMAGE_INFO}" | jq -r '.image_tag')
-            FULL_IMAGE=$(echo "${IMAGE_INFO}" | jq -r '.full_image')
+          - name: 📤 Copy file to current branch
+          if: steps.check-file.outputs.file_exists == 'true'
+          run: |
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "📤 COPYING IMAGE INFO TO CURRENT BRANCH"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             
-            git commit -m "🐳 Update QA image info in main - ${IMAGE_TAG}" \
-              -m "Image: ${FULL_IMAGE}" \
-              -m "Source: ${{ github.ref_name }}" \
-              -m "Merged from: dev" \
-              -m "Triggered by: ${{ github.actor }}"
+            # Guardar el contenido del archivo
+            IMAGE_INFO=$(cat .github/deployment-info/qa-image-info.json)
             
-            git push origin main
-            echo "✅ Image info pushed to main branch"
-            echo ""
-            echo "📊 File location: .github/deployment-info/qa-image-info.json"
-            echo "🌿 Branch: main"
-          fi
-          
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            # Crear directorio si no existe
+            mkdir -p .github/deployment-info
+            
+            # Escribir el archivo
+            echo "${IMAGE_INFO}" > .github/deployment-info/qa-image-info.json
+            
+            # Configurar git
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            
+            # Commit y push
+            git add .github/deployment-info/qa-image-info.json
+            
+            if git diff --staged --quiet; then
+              echo "⏭️  No changes to commit in current branch"
+            else
+              IMAGE_TAG=$(echo "${IMAGE_INFO}" | jq -r '.image_tag')
+              FULL_IMAGE=$(echo "${IMAGE_INFO}" | jq -r '.full_image')
+              
+              git commit -m "🐳 Update QA image info - ${IMAGE_TAG}" \
+                -m "Image: ${FULL_IMAGE}" \
+                -m "Branch: ${{ github.ref_name }}" \
+                -m "Triggered by: ${{ github.actor }}"
+              
+              git push origin ${{ github.ref_name }}
+              echo "✅ Image info pushed to current branch"
+              echo ""
+              echo "📊 File location: .github/deployment-info/qa-image-info.json"
+              echo "🌿 Branch: ${{ github.ref_name }}"
+            fi
+            
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
 
   # ───────────────────────────────────────────────────────────
   # Job FINAL: Resumen completo del workflow
@@ -353,7 +349,7 @@ jobs:
 
   say-hello:
     name: Confirmación de modificación independiente
-    needs: [save-image-info]
+    needs: create-pr-to-integration
     if: success()
     runs-on: ubuntu-latest
     steps:
