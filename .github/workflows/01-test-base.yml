@@ -131,7 +131,7 @@ jobs:
       EXTERNAL_REPO_TOKEN: ${{ secrets.GH_TOKEN2}}
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
   # ───────────────────────────────────────────────────────────
-  # Job NUEVO: Guardar información de la imagen usando los outputs de build-image
+  # Job i: Guardar información de la imagen usando los outputs de build-image
   # ───────────────────────────────────────────────────────────
   save-image-info:
     name: 💾 Save Image Info to Repository
@@ -208,6 +208,96 @@ jobs:
             git push origin main
             echo "✅ Image info pushed successfully"
           fi
+ 
+ # ───────────────────────────────────────────────────────────
+  # Job FINAL: Resumen completo del workflow
+  # ───────────────────────────────────────────────────────────
+  workflow-summary:
+    name: 📊 Workflow Summary
+    needs: [test, analyze-queries, merge-to-dev, create-pr-to-integration, build-image, save-image-info]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Workflow Summary
+        run: |
+          echo "# 🚀 Feature Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Workflow Execution Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Status de cada job
+          echo "| Job | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Tests | ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }} | Unit & Integration Tests |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 Query Analysis | ${{ needs.analyze-queries.result == 'success' && '✅ Completed' || '❌ Failed' }} | SQL Performance Analysis |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔀 Merge to Dev | ${{ needs.merge-to-dev.result == 'success' && '✅ Merged' || '❌ Failed' }} | Feature → Dev |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📝 Create PR | ${{ needs.create-pr-to-integration.result == 'success' && '✅ Created' || '❌ Failed' }} | Dev → QA |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🐳 Build Image | ${{ needs.build-image.result == 'success' && '✅ Built' || '❌ Failed' }} | Docker Image |" >> $GITHUB_STEP_SUMMARY
+          echo "| 💾 Save Info | ${{ needs.save-image-info.result == 'success' && '✅ Saved' || '❌ Failed' }} | Image Metadata |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Información de la imagen construida
+          if [[ "${{ needs.build-image.result }}" == "success" ]]; then
+            echo "## 🐳 Docker Image Information" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| **Image Name** | \`mi-aplicacion\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Primary Tag** | \`${{ needs.build-image.outputs.image_tag }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Full Image** | \`${{ needs.build-image.outputs.full_image }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Commit SHA** | \`${{ needs.build-image.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **All Tags** | \`${{ needs.build-image.outputs.all_tags }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Environment** | \`qa\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Registry** | \`us-central1-docker.pkg.dev/elite-ceremony-476307-s9/dariasmoises979\` |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            echo "### 🔗 Quick Access" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- [View in GCP Console](https://console.cloud.google.com/artifacts/docker/elite-ceremony-476307-s9/us-central1/dariasmoises979/mi-aplicacion)" >> $GITHUB_STEP_SUMMARY
+            echo "- Workflow Run: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            echo "### 📦 Pull Commands" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "# Configure Docker for GCP" >> $GITHUB_STEP_SUMMARY
+            echo "gcloud auth configure-docker us-central1-docker.pkg.dev" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "# Pull the image" >> $GITHUB_STEP_SUMMARY
+            echo "docker pull ${{ needs.build-image.outputs.full_image }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Metadata del workflow
+          echo "## 📋 Workflow Metadata" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Source Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered By** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Timestamp** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Repository** | ${{ github.repository }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Next steps
+          echo "## 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.build-image.result }}" == "success" ]]; then
+            echo "1. ✅ **Image Ready**: The Docker image has been built and pushed to GCP Artifact Registry" >> $GITHUB_STEP_SUMMARY
+            echo "2. 📝 **PR Created**: A pull request from \`dev\` to \`qa\` has been created" >> $GITHUB_STEP_SUMMARY
+            echo "3. 💾 **Info Saved**: Image metadata saved to \`.github/deployment-info/qa-image-info.json\`" >> $GITHUB_STEP_SUMMARY
+            echo "4. 🚀 **Ready for QA**: Once the PR is merged, QA workflow will automatically deploy using tag \`${{ needs.build-image.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Action Required**: Some jobs failed. Please check the logs above." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "_Generated by Feature Workflow - $(date -u +'%Y-%m-%d %H:%M:%S UTC')_" >> $GITHUB_STEP_SUMMARY
+
+ 
  #############################################################################
  # ───────────────────────────────────────────────────────────
   # Job 5: Mensaje de confirmación
