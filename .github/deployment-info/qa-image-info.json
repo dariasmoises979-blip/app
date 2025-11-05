@@ -3,14 +3,14 @@
   "gcp_project_id": "elite-ceremony-476307-s9",
   "gcp_region": "us-central1",
   "artifact_registry": "dariasmoises979",
-  "image_tag": "qa-3899af1",
-  "full_image": "us-central1-docker.pkg.dev/elite-ceremony-476307-s9/dariasmoises979/mi-aplicacion:qa-3899af1",
+  "image_tag": "qa-2275c12",
+  "full_image": "us-central1-docker.pkg.dev/elite-ceremony-476307-s9/dariasmoises979/mi-aplicacion:qa-2275c12",
   "environment": "qa",
-  "commit_sha": "3899af1d45c2879d2524c8ef5460a189845a118f",
-  "commit_sha_short": "3899af1",
-  "all_tags": "qa-3899af1,qa,feature-v1.1-3899af1",
-  "build_time": "2025-11-05T08:05:02Z",
+  "commit_sha": "2275c1218dfa5cb571d215a4a338505cb9ccafa4",
+  "commit_sha_short": "2275c12",
+  "all_tags": "qa-2275c12,qa,feature-v1.1-2275c12",
+  "build_time": "2025-11-05T08:20:58Z",
   "source_branch": "feature/v1.1",
   "triggered_by": "dariasmoises979-blip",
-  "workflow_run_id": "19095221483"
+  "workflow_run_id": "19095597540"
 }
