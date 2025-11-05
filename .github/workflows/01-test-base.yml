@@ -66,7 +66,7 @@ jobs:
 
   merge-to-dev:
     name: Merge to Dev
-    needs: test
+    needs: save-image-info
     if: startsWith(github.ref_name, 'feature/') && success()
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/auto-merge.yml@main
     with:
@@ -88,7 +88,7 @@ jobs:
 
   build-image:
     name: Build Docker Image
-    needs: create-pr-to-integration
+    needs: test
     uses: dariasmoises979-blip/pipeline-build/.github/workflows/build-image-gcp.yml@main
     with:
       docker_image: mi-aplicacion
@@ -254,7 +254,7 @@ jobs:
               -m "Merged from: dev" \
               -m "Triggered by: ${{ github.actor }}"
             
-            git push origin main
+            git push origin ${{ github.ref_name }}
             echo "✅ Image info pushed to main branch"
             echo ""
             echo "📊 File location: .github/deployment-info/qa-image-info.json"
