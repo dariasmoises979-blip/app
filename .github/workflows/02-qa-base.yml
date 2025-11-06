@@ -11,6 +11,10 @@ on:
   push:
     branches:
       - qa
+    paths-ignore:
+      - '.github/deployment-info/**'  # ✅ Evita bucle infinito
+      - '**.md'
+      - '.gitignore'
   workflow_dispatch:
 
 jobs:
@@ -126,7 +130,8 @@ jobs:
           if git diff --staged --quiet; then
             echo "⏭️  No changes to commit"
           else
-            git commit -m "[skip ci] 🐳 Update QA image metadata" \
+            # ✅ Usa ambos formatos para máxima compatibilidad
+            git commit -m "[skip ci][ci skip] 🐳 Update QA image metadata" \
               -m "Image: ${{ needs.build-image.outputs.full_image }}" \
               -m "Tag: ${{ needs.build-image.outputs.image_tag }}" \
               -m "Commit: ${{ needs.build-image.outputs.short_sha }}" \
@@ -135,6 +140,7 @@ jobs:
               
             git push origin qa
             echo "✅ Metadata committed to qa branch"
+            echo "ℹ️  This push will NOT trigger the workflow again due to [skip ci]"
           fi
 
   # ═══════════════════════════════════════════════════════════
@@ -223,7 +229,17 @@ jobs:
             echo "📁 Manifest files:"
             ls -lah "${MANIFEST_DIR}"
             
-            # Verificar sintaxis YAML (requiere yq o similar)
+            echo ""
+            echo "📄 Checking for deployment.yaml:"
+            if [ -f "${MANIFEST_DIR}/deployment.yaml" ]; then
+              echo "✅ deployment.yaml found"
+              echo ""
+              echo "🔍 Current image in deployment:"
+              grep -A 2 "image:" "${MANIFEST_DIR}/deployment.yaml" || echo "Could not extract image info"
+            else
+              echo "⚠️  deployment.yaml not found"
+            fi
+            
             if command -v yamllint &> /dev/null; then
               echo ""
               echo "🔍 Running YAML validation..."
@@ -231,6 +247,7 @@ jobs:
             fi
           else
             echo "⚠️  Manifest directory not found: ${MANIFEST_DIR}"
+            echo "ℹ️  Expected path in 'qa' branch: ${MANIFEST_DIR}"
           fi
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -328,6 +345,7 @@ jobs:
             echo "| Resource | Location |" >> $GITHUB_STEP_SUMMARY
             echo "|----------|----------|" >> $GITHUB_STEP_SUMMARY
             echo "| **Manifests Repo** | [dariasmoises979-blip/pipeline-build](https://github.com/dariasmoises979-blip/pipeline-build) |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Manifests Branch** | \`qa\` ✅ |" >> $GITHUB_STEP_SUMMARY
             echo "| **Manifests Path** | \`kubernetes/qa/${{ github.event.repository.name }}/\` |" >> $GITHUB_STEP_SUMMARY
             echo "| **Helm Values** | \`helm/override/qa/\` |" >> $GITHUB_STEP_SUMMARY
             echo "| **Target Branch** | \`main\` |" >> $GITHUB_STEP_SUMMARY
@@ -341,23 +359,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
           
-          # Verificación kubectl commands
-          echo "## 🔍 Verification Commands" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "# Verify pods status" >> $GITHUB_STEP_SUMMARY
-          echo "kubectl get pods -n qa -l app=mi-aplicacion" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# Check deployment details" >> $GITHUB_STEP_SUMMARY
-          echo "kubectl describe deployment mi-aplicacion -n qa" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# Verify image in use" >> $GITHUB_STEP_SUMMARY
-          echo "kubectl get deployment mi-aplicacion -n qa -o jsonpath='{.spec.template.spec.containers[0].image}'" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# Check logs" >> $GITHUB_STEP_SUMMARY
-          echo "kubectl logs -n qa -l app=mi-aplicacion --tail=50" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+
           
           # Next steps
           echo "## 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
