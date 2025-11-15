@@ -1,369 +1,974 @@
 version: '3.9'
 
 # ============================================================================
-# DOCKER COMPOSE PARA DESARROLLO LOCAL DE MICROSERVICIOS
+# DOCKER COMPOSE - BUENAS PRÁCTICAS PARA DESARROLLO
 # ============================================================================
-# Características:
-# - Contraseñas simples para desarrollo
-# - Todos los puertos expuestos
-# - Sin límites de recursos
-# - Hot reload friendly
-# - Herramientas de debugging
+# - Secrets externalizados
+# - Health checks en todos los servicios
+# - Límites de recursos definidos
+# - Redes segregadas por capa
+# - Variables de entorno desde .env
+# - Naming conventions consistente
+# - Logging configurado
+# - Restart policies apropiadas
 # ============================================================================
 
+# ============================================================================
+# NETWORKS - Segregación por capas
+# ============================================================================
 networks:
-  dev-network:
+  frontend-network:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_frontend
+    driver: bridge
+  backend-network:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_backend
+    driver: bridge
+  database-network:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_database
+    driver: bridge
+    internal: true  # No accesible desde fuera
+  monitoring-network:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_monitoring
     driver: bridge
 
+# ============================================================================
+# VOLUMES - Persistencia de datos
+# ============================================================================
 volumes:
-  postgres_dev_data:
-  mysql_dev_data:
-  mongo_dev_data:
-  redis_dev_data:
+  postgres-data:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_postgres_data
+  mysql-data:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_mysql_data
+  mongodb-data:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_mongodb_data
+  redis-data:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_redis_data
+  rabbitmq-data:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_rabbitmq_data
+  kafka-data:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_kafka_data
+  prometheus-data:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_prometheus_data
+  grafana-data:
+    name: ${COMPOSE_PROJECT_NAME:-dev}_grafana_data
 
 services:
-  # ============================================================================
-  # BASES DE DATOS - Configuración para Desarrollo
-  # ============================================================================
-  
-  # PostgreSQL - Usuario: postgres | Password: postgres | DB: dev_db
+  # ==========================================================================
+  # CAPA DE DATOS - BASES DE DATOS
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL - Base de datos relacional principal
+  # --------------------------------------------------------------------------
   postgres:
-    image: postgres:16-alpine
-    container_name: dev_postgres
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_postgres
+    hostname: postgres
+    restart: unless-stopped
+    
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: dev_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-dev_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      # Optimizaciones para desarrollo
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
+    
     volumes:
-      - postgres_dev_data:/var/lib/postgresql/data
-      - ./docker-volumes/postgres-init:/docker-entrypoint-initdb.d
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker-volumes/postgres-init:/docker-entrypoint-initdb.d:ro
+      - ./docker-volumes/postgres-config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
+    
     networks:
-      - dev-network
-    command: postgres -c log_statement=all -c log_destination=stderr
+      - database-network
+      - backend-network
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-dev_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    labels:
+      com.microservices.description: "PostgreSQL database"
+      com.microservices.tier: "database"
 
-  # MySQL - Usuario: root | Password: root | DB: dev_db
+  # --------------------------------------------------------------------------
+  # MySQL - Base de datos para servicios específicos
+  # --------------------------------------------------------------------------
   mysql:
-    image: mysql:8.2
-    container_name: dev_mysql
+    image: mysql:${MYSQL_VERSION:-8.2}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_mysql
+    hostname: mysql
+    restart: unless-stopped
+    
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: dev_db
-      MYSQL_USER: dev_user
-      MYSQL_PASSWORD: dev_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-dev_db}
+      MYSQL_USER: ${MYSQL_USER:-dev_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-dev_pass}
+      # Configuraciones de seguridad
+      MYSQL_ROOT_HOST: "%"
+    
     volumes:
-      - mysql_dev_data:/var/lib/mysql
-      - ./docker-volumes/mysql-init:/docker-entrypoint-initdb.d
+      - mysql-data:/var/lib/mysql
+      - ./docker-volumes/mysql-init:/docker-entrypoint-initdb.d:ro
+      - ./docker-volumes/mysql-config/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT:-3306}:3306"
+    
     networks:
-      - dev-network
-    command: --default-authentication-plugin=mysql_native_password --general-log=1 --general-log-file=/var/log/mysql/general.log
+      - database-network
+      - backend-network
+    
+    command: 
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max-connections=200
+    
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    labels:
+      com.microservices.description: "MySQL database"
+      com.microservices.tier: "database"
 
-  # MongoDB - Sin autenticación para desarrollo
+  # --------------------------------------------------------------------------
+  # MongoDB - Base de datos NoSQL
+  # --------------------------------------------------------------------------
   mongodb:
-    image: mongo:7.0
-    container_name: dev_mongo
+    image: mongo:${MONGODB_VERSION:-7.0}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_mongodb
+    hostname: mongodb
+    restart: unless-stopped
+    
     environment:
-      MONGO_INITDB_DATABASE: dev_db
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-dev_db}
+    
     volumes:
-      - mongo_dev_data:/data/db
-      - ./docker-volumes/mongo-init:/docker-entrypoint-initdb.d
+      - mongodb-data:/data/db
+      - ./docker-volumes/mongo-init:/docker-entrypoint-initdb.d:ro
+      - ./docker-volumes/mongo-config/mongod.conf:/etc/mongod.conf:ro
+    
     ports:
-      - "27017:27017"
+      - "${MONGODB_PORT:-27017}:27017"
+    
     networks:
-      - dev-network
-    command: mongod --quiet --logpath /dev/null
+      - database-network
+      - backend-network
+    
+    command: mongod --config /etc/mongod.conf
+    
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    labels:
+      com.microservices.description: "MongoDB NoSQL database"
+      com.microservices.tier: "database"
 
-  # Redis - Sin password para desarrollo
+  # --------------------------------------------------------------------------
+  # Redis - Cache y sesiones
+  # --------------------------------------------------------------------------
   redis:
-    image: redis:7-alpine
-    container_name: dev_redis
-    command: redis-server --appendonly yes --loglevel verbose
+    image: redis:${REDIS_VERSION:-7-alpine}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_redis
+    hostname: redis
+    restart: unless-stopped
+    
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --loglevel warning
+      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    
     volumes:
-      - redis_dev_data:/data
+      - redis-data:/data
+      - ./docker-volumes/redis-config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
+    
     networks:
-      - dev-network
+      - backend-network
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    
+    labels:
+      com.microservices.description: "Redis cache and session store"
+      com.microservices.tier: "cache"
 
-  # ============================================================================
-  # MESSAGE BROKERS - Simplificados
-  # ============================================================================
+  # ==========================================================================
+  # CAPA DE MENSAJERÍA
+  # ==========================================================================
 
-  # RabbitMQ - Usuario: guest | Password: guest
+  # --------------------------------------------------------------------------
+  # RabbitMQ - Message Broker
+  # --------------------------------------------------------------------------
   rabbitmq:
-    image: rabbitmq:3.12-management-alpine
-    container_name: dev_rabbitmq
+    image: rabbitmq:${RABBITMQ_VERSION:-3.12-management-alpine}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_rabbitmq
+    hostname: rabbitmq
+    restart: unless-stopped
+    
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+      RABBITMQ_VM_MEMORY_HIGH_WATERMARK: 512MB
+    
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./docker-volumes/rabbitmq-config/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./docker-volumes/rabbitmq-config/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    
     ports:
-      - "5672:5672"   # AMQP
-      - "15672:15672" # Management UI -> http://localhost:15672
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    
     networks:
-      - dev-network
+      - backend-network
+    
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    labels:
+      com.microservices.description: "RabbitMQ message broker"
+      com.microservices.tier: "messaging"
 
-  # Kafka Simplificado con KRaft (sin Zookeeper)
+  # --------------------------------------------------------------------------
+  # Kafka - Event Streaming (KRaft mode sin Zookeeper)
+  # --------------------------------------------------------------------------
   kafka:
-    image: bitnami/kafka:3.6
-    container_name: dev_kafka
+    image: bitnami/kafka:${KAFKA_VERSION:-3.6}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_kafka
+    hostname: kafka
+    restart: unless-stopped
+    
     environment:
-      # KRaft settings (sin Zookeeper)
+      # KRaft mode (sin Zookeeper)
       KAFKA_CFG_NODE_ID: 0
       KAFKA_CFG_PROCESS_ROLES: controller,broker
       KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      
+      # Listeners
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      
       # Configuración para desarrollo
       KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_CFG_LOG_RETENTION_HOURS: 1
+      KAFKA_CFG_LOG_RETENTION_HOURS: 24
       KAFKA_CFG_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_CFG_NUM_PARTITIONS: 3
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: 1
+      
+      # Optimizaciones
+      KAFKA_HEAP_OPTS: "-Xmx256M -Xms256M"
+    
+    volumes:
+      - kafka-data:/bitnami/kafka
+    
     ports:
-      - "9092:9092"
+      - "${KAFKA_PORT:-9094}:9094"
+    
     networks:
-      - dev-network
+      - backend-network
+    
+    healthcheck:
+      test: kafka-topics.sh --bootstrap-server localhost:9092 --list
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    labels:
+      com.microservices.description: "Apache Kafka event streaming"
+      com.microservices.tier: "messaging"
 
-  # Kafka UI - Interfaz gráfica para Kafka
+  # --------------------------------------------------------------------------
+  # Kafka UI - Interfaz gráfica
+  # --------------------------------------------------------------------------
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: dev_kafka_ui
+    image: provectuslabs/kafka-ui:${KAFKA_UI_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_kafka_ui
+    hostname: kafka-ui
+    restart: unless-stopped
+    
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
+    
     environment:
-      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_NAME: ${COMPOSE_PROJECT_NAME:-dev}
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       DYNAMIC_CONFIG_ENABLED: "true"
+      AUTH_TYPE: "DISABLED"
+    
     ports:
-      - "8080:8080" # UI -> http://localhost:8080
+      - "${KAFKA_UI_PORT:-8080}:8080"
+    
     networks:
-      - dev-network
+      - backend-network
+      - frontend-network
+    
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    
+    labels:
+      com.microservices.description: "Kafka UI web interface"
+      com.microservices.tier: "tools"
 
-  # ============================================================================
-  # HERRAMIENTAS DE DESARROLLO Y DEBUGGING
-  # ============================================================================
+  # ==========================================================================
+  # CAPA DE GATEWAY Y PROXY
+  # ==========================================================================
 
-  # Adminer - Cliente web universal para BD (mejor que PHPMyAdmin)
+  # --------------------------------------------------------------------------
+  # Nginx - API Gateway y Reverse Proxy
+  # --------------------------------------------------------------------------
+  nginx:
+    image: nginx:${NGINX_VERSION:-alpine}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_nginx
+    hostname: nginx
+    restart: unless-stopped
+    
+    volumes:
+      - ./docker-volumes/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker-volumes/nginx/html:/usr/share/nginx/html:ro
+      - ./docker-volumes/nginx/logs:/var/log/nginx
+    
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    
+    networks:
+      - frontend-network
+      - backend-network
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    
+    labels:
+      com.microservices.description: "Nginx API Gateway"
+      com.microservices.tier: "gateway"
+
+  # ==========================================================================
+  # CAPA DE HERRAMIENTAS DE DESARROLLO
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # Adminer - Cliente universal de bases de datos
+  # --------------------------------------------------------------------------
   adminer:
-    image: adminer:latest
-    container_name: dev_adminer
+    image: adminer:${ADMINER_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_adminer
+    hostname: adminer
+    restart: unless-stopped
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    
     environment:
       ADMINER_DEFAULT_SERVER: postgres
-      ADMINER_DESIGN: dracula
+      ADMINER_DESIGN: ${ADMINER_DESIGN:-dracula}
+    
     ports:
-      - "8081:8080" # UI -> http://localhost:8081
+      - "${ADMINER_PORT:-8081}:8080"
+    
     networks:
-      - dev-network
+      - frontend-network
+      - database-network
+    
+    healthcheck:
+      test: ["CMD", "php", "-r", "echo 'healthy';"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    
+    labels:
+      com.microservices.description: "Adminer database client"
+      com.microservices.tier: "tools"
 
+  # --------------------------------------------------------------------------
   # Mongo Express - UI para MongoDB
+  # --------------------------------------------------------------------------
   mongo-express:
-    image: mongo-express:latest
-    container_name: dev_mongo_ui
+    image: mongo-express:${MONGO_EXPRESS_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_mongo_express
+    hostname: mongo-express
+    restart: unless-stopped
+    
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
+    
     environment:
       ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
       ME_CONFIG_BASICAUTH: "false"
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
+    
     ports:
-      - "8082:8081" # UI -> http://localhost:8082
+      - "${MONGO_EXPRESS_PORT:-8082}:8081"
+    
     networks:
-      - dev-network
+      - frontend-network
+      - database-network
+    
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8081 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    
+    labels:
+      com.microservices.description: "Mongo Express web interface"
+      com.microservices.tier: "tools"
 
+  # --------------------------------------------------------------------------
   # RedisInsight - UI oficial de Redis
+  # --------------------------------------------------------------------------
   redis-insight:
-    image: redis/redisinsight:latest
-    container_name: dev_redis_ui
+    image: redis/redisinsight:${REDISINSIGHT_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_redis_insight
+    hostname: redis-insight
+    restart: unless-stopped
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+    
     ports:
-      - "5540:5540" # UI -> http://localhost:5540
+      - "${REDISINSIGHT_PORT:-5540}:5540"
+    
     networks:
-      - dev-network
+      - frontend-network
+      - backend-network
+    
     volumes:
       - ./docker-volumes/redisinsight:/data
+    
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:5540 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    
+    labels:
+      com.microservices.description: "RedisInsight client"
+      com.microservices.tier: "tools"
 
-  # Mailhog - SMTP de prueba (captura emails)
+  # --------------------------------------------------------------------------
+  # Mailhog - Servidor SMTP de prueba
+  # --------------------------------------------------------------------------
   mailhog:
-    image: mailhog/mailhog:latest
-    container_name: dev_mailhog
+    image: mailhog/mailhog:${MAILHOG_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_mailhog
+    hostname: mailhog
+    restart: unless-stopped
+    
     ports:
-      - "1025:1025" # SMTP
-      - "8025:8025" # UI -> http://localhost:8025
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+    
     networks:
-      - dev-network
+      - frontend-network
+      - backend-network
+    
+    healthcheck:
+      test: echo 'OK'
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    
+    labels:
+      com.microservices.description: "Mailhog SMTP server"
+      com.microservices.tier: "tools"
 
-  # Nginx - Reverse proxy local
-  nginx:
-    image: nginx:alpine
-    container_name: dev_nginx
-    volumes:
-      - ./docker-volumes/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./docker-volumes/nginx/html:/usr/share/nginx/html
-    ports:
-      - "80:80"
-      - "443:443"
-    networks:
-      - dev-network
+  # ==========================================================================
+  # CAPA DE MONITOREO Y OBSERVABILIDAD
+  # ==========================================================================
 
-  # ============================================================================
-  # MONITORING LIGERO PARA DESARROLLO
-  # ============================================================================
-
-  # Prometheus - Métricas
+  # --------------------------------------------------------------------------
+  # Prometheus - Sistema de métricas
+  # --------------------------------------------------------------------------
   prometheus:
-    image: prom/prometheus:latest
-    container_name: dev_prometheus
-    volumes:
-      - ./docker-volumes/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    image: prom/prometheus:${PROMETHEUS_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_prometheus
+    hostname: prometheus
+    restart: unless-stopped
+    
+    user: "nobody"
+    
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.retention.time=1d'
-    ports:
-      - "9090:9090" # UI -> http://localhost:9090
-    networks:
-      - dev-network
-
-  # Grafana - Dashboards
-  grafana:
-    image: grafana/grafana:latest
-    container_name: dev_grafana
-    depends_on:
-      - prometheus
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    
     volumes:
-      - ./docker-volumes/grafana/provisioning:/etc/grafana/provisioning
+      - ./docker-volumes/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker-volumes/prometheus/alerts:/etc/prometheus/alerts:ro
+      - prometheus-data:/prometheus
+    
     ports:
-      - "3000:3000" # UI -> http://localhost:3000
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    
     networks:
-      - dev-network
+      - monitoring-network
+      - backend-network
+    
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    labels:
+      com.microservices.description: "Prometheus monitoring"
+      com.microservices.tier: "monitoring"
 
-  # Jaeger - Distributed Tracing simplificado
+  # --------------------------------------------------------------------------
+  # Grafana - Visualización de datos
+  # --------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_grafana
+    hostname: grafana
+    restart: unless-stopped
+    
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    
+    user: "472"
+    
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3000
+      GF_INSTALL_PLUGINS: ""
+    
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker-volumes/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker-volumes/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    
+    networks:
+      - frontend-network
+      - monitoring-network
+    
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    labels:
+      com.microservices.description: "Grafana dashboards"
+      com.microservices.tier: "monitoring"
+
+  # --------------------------------------------------------------------------
+  # Jaeger - Distributed Tracing
+  # --------------------------------------------------------------------------
   jaeger:
-    image: jaegertracing/all-in-one:latest
-    container_name: dev_jaeger
+    image: jaegertracing/all-in-one:${JAEGER_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_jaeger
+    hostname: jaeger
+    restart: unless-stopped
+    
     environment:
       COLLECTOR_ZIPKIN_HOST_PORT: :9411
       COLLECTOR_OTLP_ENABLED: "true"
+      SPAN_STORAGE_TYPE: memory
+      MEMORY_MAX_TRACES: 10000
+    
     ports:
-      - "5775:5775/udp"
-      - "6831:6831/udp"
-      - "6832:6832/udp"
-      - "5778:5778"
-      - "16686:16686" # UI -> http://localhost:16686
-      - "14268:14268"
-      - "14250:14250"
-      - "9411:9411"
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
+      - "${JAEGER_UDP_PORT:-6831}:6831/udp"
+      - "${JAEGER_UI_PORT:-16686}:16686"
+      - "${JAEGER_OTLP_GRPC:-4317}:4317"
+      - "${JAEGER_OTLP_HTTP:-4318}:4318"
+    
     networks:
-      - dev-network
+      - frontend-network
+      - backend-network
+      - monitoring-network
+    
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:14269 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    labels:
+      com.microservices.description: "Jaeger tracing"
+      com.microservices.tier: "monitoring"
 
-  # ============================================================================
-  # UTILIDADES EXTRA
-  # ============================================================================
+  # ==========================================================================
+  # UTILIDADES ADICIONALES
+  # ==========================================================================
 
-  # Portainer - Gestión Docker con UI
+  # --------------------------------------------------------------------------
+  # Portainer - Gestión de contenedores
+  # --------------------------------------------------------------------------
   portainer:
-    image: portainer/portainer-ce:latest
-    container_name: dev_portainer
-    command: -H unix:///var/run/docker.sock
+    image: portainer/portainer-ce:${PORTAINER_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_portainer
+    hostname: portainer
+    restart: unless-stopped
+    
+    command: -H unix:///var/run/docker.sock --no-analytics
+    
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./docker-volumes/portainer:/data
+    
     ports:
-      - "9000:9000" # UI -> http://localhost:9000
+      - "${PORTAINER_HTTP_PORT:-9000}:9000"
+      - "${PORTAINER_HTTPS_PORT:-9443}:9443"
+    
     networks:
-      - dev-network
+      - frontend-network
+    
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:9000/api/status || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    
+    labels:
+      com.microservices.description: "Portainer container management"
+      com.microservices.tier: "tools"
 
-  # Swagger Editor - Para diseñar APIs
-  swagger-editor:
-    image: swaggerapi/swagger-editor
-    container_name: dev_swagger
-    ports:
-      - "8083:8080" # UI -> http://localhost:8083
-    networks:
-      - dev-network
-
-  # MinIO - S3 compatible para pruebas de storage
+  # --------------------------------------------------------------------------
+  # MinIO - S3 Compatible Storage
+  # --------------------------------------------------------------------------
   minio:
-    image: minio/minio:latest
-    container_name: dev_minio
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+    image: minio/minio:${MINIO_VERSION:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-dev}_minio
+    hostname: minio
+    restart: unless-stopped
+    
     command: server /data --console-address ":9001"
+    
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    
     volumes:
       - ./docker-volumes/minio:/data
+    
     ports:
-      - "9001:9001" # Console -> http://localhost:9001
-      - "9002:9000" # API
+      - "${MINIO_API_PORT:-9002}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    
     networks:
-      - dev-network
-
-# ============================================================================
-# INSTRUCCIONES DE USO
-# ============================================================================
-# 
-# 1. Iniciar todos los servicios:
-#    docker-compose up -d
-#
-# 2. Iniciar servicios específicos:
-#    docker-compose up -d postgres redis rabbitmq
-#
-# 3. Ver logs:
-#    docker-compose logs -f [servicio]
-#
-# 4. Detener todo:
-#    docker-compose down
-#
-# 5. Eliminar volúmenes (CUIDADO - borra datos):
-#    docker-compose down -v
-#
-# ============================================================================
-# CREDENCIALES Y PUERTOS
-# ============================================================================
-#
-# PostgreSQL:
-#   - Host: localhost:5432
-#   - User: postgres / Password: postgres
-#
-# MySQL:
-#   - Host: localhost:3306
-#   - User: root / Password: root
-#
-# MongoDB:
-#   - Host: localhost:27017
-#   - Sin autenticación
-#
-# Redis:
-#   - Host: localhost:6379
-#   - Sin password
-#
-# RabbitMQ:
-#   - AMQP: localhost:5672
-#   - UI: http://localhost:15672 (guest/guest)
-#
-# Kafka:
-#   - Bootstrap: localhost:9092
-#   - UI: http://localhost:8080
-#
-# HERRAMIENTAS UI:
-#   - Adminer (BD): http://localhost:8081
-#   - Mongo Express: http://localhost:8082
-#   - Redis Insight: http://localhost:5540
-#   - Mailhog: http://localhost:8025
-#   - Prometheus: http://localhost:9090
-#   - Grafana: http://localhost:3000 (admin/admin)
-#   - Jaeger: http://localhost:16686
-#   - Portainer: http://localhost:9000
-#   - Swagger Editor: http://localhost:8083
-#   - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
-#
-# ============================================================================
+      - backend-network
+      - frontend-network
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    logging:
