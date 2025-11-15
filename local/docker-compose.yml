@@ -13,3 +13,5 @@ services:
       - FLASK_ENV=development
       - FLASK_DEBUG=1
     restart: unless-stopped
+    networks:
+      - app_network

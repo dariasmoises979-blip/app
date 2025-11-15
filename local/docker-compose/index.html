@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dev Environment - Microservices</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+        
+        .subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .service-list {
+            list-style: none;
+        }
+        
+        .service-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .service-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .service-name {
+            font-weight: 600;
+            color: #333;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .service-info {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        .badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-left: 5px;
+        }
+        
+        .status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .footer {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 40px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Entorno de Desarrollo Local</h1>
+        <p class="subtitle">Arquitectura de Microservicios - Todas las herramientas en un solo lugar</p>
+        
+        <div class="grid">
+            <!-- Bases de Datos -->
+            <div class="card">
+                <h2>💾 Bases de Datos</h2>
+                <ul class="service-list">
+                    <li>
+                        <span class="status"></span>
+                        <span class="service-name">PostgreSQL</span>
+                        <span class="service-info">localhost:5432 | postgres/postgres</span>
+                    </li>
+                    <li>
+                        <span class="status"></span>
+                        <span class="service-name">MySQL</span>
+                        <span class="service-info">localhost:3306 | root/root</span>
+                    </li>
+                    <li>
+                        <span class="status"></span>
+                        <span class="service-name">MongoDB</span>
+                        <span class="service-info">localhost:27017 | sin auth</span>
+                    </li>
+                    <li>
+                        <span class="status"></span>
+                        <span class="service-name">Redis</span>
+                        <span class="service-info">localhost:6379 | sin password</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Herramientas UI -->
+            <div class="card">
+                <h2>🎨 Interfaces Web</h2>
+                <ul class="service-list">
+                    <li>
+                        <a href="http://localhost:8081" target="_blank">
+                            <span class="service-name">Adminer <span class="badge">BD Universal</span></span>
+                        </a>
+                        <span class="service-info">Cliente para PostgreSQL, MySQL y más</span>
+                    </li>
+                    <li>
+                        <a href="http://localhost:8082" target="_blank">
+                            <span class="service-name">Mongo Express</span>
+                        </a>
+                        <span class="service-info">Administrador de MongoDB</span>
+                    </li>
+                    <li>
+                        <a href="http://localhost:5540" target="_blank">
+                            <span class="service-name">RedisInsight</span>
+                        </a>
+                        <span class="service-info">Cliente oficial de Redis</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Mensajería -->
+            <div class="card">
+                <h2>📨 Message Brokers</h2>
+                <ul class="service-list">
+                    <li>
+                        <a href="http://localhost:15672" target="_blank">
+                            <span class="service-name">RabbitMQ Management</span>
+                        </a>
+                        <span class="service-info">guest/guest | AMQP: localhost:5672</span>
+                    </li>
+                    <li>
+                        <a href="http://localhost:8080" target="_blank">
+                            <span class="service-name">Kafka UI</span>
+                        </a>
+                        <span class="service-info">Bootstrap: localhost:9092</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Monitoreo -->
+            <div class="card">
+                <h2>📊 Monitoreo y Trazas</h2>
+                <ul class="service-list">
+                    <li>
+                        <a href="http://localhost:9090" target="_blank">
+                            <span class="service-name">Prometheus</span>
+                        </a>
+                        <span class="service-info">Sistema de métricas y alertas</span>
+                    </li>
+                    <li>
+                        <a href="http://localhost:3000" target="_blank">
+                            <span class="service-name">Grafana</span>
+                        </a>
+                        <span class="service-info">admin/admin | Visualización de datos</span>
+                    </li>
+                    <li>
+                        <a href="http://localhost:16686" target="_blank">
+                            <span class="service-name">Jaeger</span>
+                        </a>
+                        <span class="service-info">Distributed tracing</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Utilidades -->
+            <div class="card">
+                <h2>🛠️ Utilidades</h2>
+                <ul class="service-list">
+                    <li>
+                        <a href="http://localhost:8025" target="_blank">
+                            <span class="service-name">Mailhog</span>
+                        </a>
+                        <span class="service-info">SMTP de prueba | localhost:1025</span>
+                    </li>
+                    <li>
+                        <a href="http://localhost:9000" target="_blank">
+                            <span class="service-name">Portainer</span>
+                        </a>
+                        <span class="service-info">Gestión de contenedores Docker</span>
+                    </li>
+                    <li>
+                        <a href="http://localhost:8083" target="_blank">
+                            <span class="service-name">Swagger Editor</span>
+                        </a>
+                        <span class="service-info">Diseño de APIs OpenAPI</span>
+                    </li>
+                    <li>
+                        <a href="http://localhost:9001" target="_blank">
+                            <span class="service-name">MinIO Console</span>
+                        </a>
+                        <span class="service-info">minioadmin/minioadmin | S3 Local</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- API Gateway -->
+            <div class="card">
+                <h2>🌐 API Gateway (Nginx)</h2>
+                <ul class="service-list">
+                    <li>
+                        <span class="service-name">User Service</span>
+                        <span class="service-info">http://localhost/api/users</span>
+                    </li>
+                    <li>
+                        <span class="service-name">Order Service</span>
+                        <span class="service-info">http://localhost/api/orders</span>
+                    </li>
+                    <li>
+                        <span class="service-name">Product Service</span>
+                        <span class="service-info">http://localhost/api/products</span>
+                    </li>
+                    <li>
+                        <span class="service-name">Payment Service</span>
+                        <span class="service-info">http://localhost/api/payments</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>💡 Tip: Usa <code>docker-compose logs -f [servicio]</code> para ver los logs en tiempo real</p>
+            <p>🔄 Para reiniciar un servicio: <code>docker-compose restart [servicio]</code></p>
+        </div>
+    </div>
+</body>
+</html>

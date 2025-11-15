@@ -1,0 +1,369 @@
+version: '3.9'
+
+# ============================================================================
+# DOCKER COMPOSE PARA DESARROLLO LOCAL DE MICROSERVICIOS
+# ============================================================================
+# Características:
+# - Contraseñas simples para desarrollo
+# - Todos los puertos expuestos
+# - Sin límites de recursos
+# - Hot reload friendly
+# - Herramientas de debugging
+# ============================================================================
+
+networks:
+  dev-network:
+    driver: bridge
+
+volumes:
+  postgres_dev_data:
+  mysql_dev_data:
+  mongo_dev_data:
+  redis_dev_data:
+
+services:
+  # ============================================================================
+  # BASES DE DATOS - Configuración para Desarrollo
+  # ============================================================================
+  
+  # PostgreSQL - Usuario: postgres | Password: postgres | DB: dev_db
+  postgres:
+    image: postgres:16-alpine
+    container_name: dev_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dev_db
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./docker-volumes/postgres-init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - dev-network
+    command: postgres -c log_statement=all -c log_destination=stderr
+
+  # MySQL - Usuario: root | Password: root | DB: dev_db
+  mysql:
+    image: mysql:8.2
+    container_name: dev_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: dev_db
+      MYSQL_USER: dev_user
+      MYSQL_PASSWORD: dev_pass
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+      - ./docker-volumes/mysql-init:/docker-entrypoint-initdb.d
+    ports:
+      - "3306:3306"
+    networks:
+      - dev-network
+    command: --default-authentication-plugin=mysql_native_password --general-log=1 --general-log-file=/var/log/mysql/general.log
+
+  # MongoDB - Sin autenticación para desarrollo
+  mongodb:
+    image: mongo:7.0
+    container_name: dev_mongo
+    environment:
+      MONGO_INITDB_DATABASE: dev_db
+    volumes:
+      - mongo_dev_data:/data/db
+      - ./docker-volumes/mongo-init:/docker-entrypoint-initdb.d
+    ports:
+      - "27017:27017"
+    networks:
+      - dev-network
+    command: mongod --quiet --logpath /dev/null
+
+  # Redis - Sin password para desarrollo
+  redis:
+    image: redis:7-alpine
+    container_name: dev_redis
+    command: redis-server --appendonly yes --loglevel verbose
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - dev-network
+
+  # ============================================================================
+  # MESSAGE BROKERS - Simplificados
+  # ============================================================================
+
+  # RabbitMQ - Usuario: guest | Password: guest
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: dev_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI -> http://localhost:15672
+    networks:
+      - dev-network
+
+  # Kafka Simplificado con KRaft (sin Zookeeper)
+  kafka:
+    image: bitnami/kafka:3.6
+    container_name: dev_kafka
+    environment:
+      # KRaft settings (sin Zookeeper)
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Configuración para desarrollo
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_LOG_RETENTION_HOURS: 1
+      KAFKA_CFG_LOG_SEGMENT_BYTES: 1073741824
+    ports:
+      - "9092:9092"
+    networks:
+      - dev-network
+
+  # Kafka UI - Interfaz gráfica para Kafka
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: dev_kafka_ui
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    ports:
+      - "8080:8080" # UI -> http://localhost:8080
+    networks:
+      - dev-network
+
+  # ============================================================================
+  # HERRAMIENTAS DE DESARROLLO Y DEBUGGING
+  # ============================================================================
+
+  # Adminer - Cliente web universal para BD (mejor que PHPMyAdmin)
+  adminer:
+    image: adminer:latest
+    container_name: dev_adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: dracula
+    ports:
+      - "8081:8080" # UI -> http://localhost:8081
+    networks:
+      - dev-network
+
+  # Mongo Express - UI para MongoDB
+  mongo-express:
+    image: mongo-express:latest
+    container_name: dev_mongo_ui
+    depends_on:
+      - mongodb
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    ports:
+      - "8082:8081" # UI -> http://localhost:8082
+    networks:
+      - dev-network
+
+  # RedisInsight - UI oficial de Redis
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: dev_redis_ui
+    ports:
+      - "5540:5540" # UI -> http://localhost:5540
+    networks:
+      - dev-network
+    volumes:
+      - ./docker-volumes/redisinsight:/data
+
+  # Mailhog - SMTP de prueba (captura emails)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: dev_mailhog
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # UI -> http://localhost:8025
+    networks:
+      - dev-network
+
+  # Nginx - Reverse proxy local
+  nginx:
+    image: nginx:alpine
+    container_name: dev_nginx
+    volumes:
+      - ./docker-volumes/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker-volumes/nginx/html:/usr/share/nginx/html
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - dev-network
+
+  # ============================================================================
+  # MONITORING LIGERO PARA DESARROLLO
+  # ============================================================================
+
+  # Prometheus - Métricas
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dev_prometheus
+    volumes:
+      - ./docker-volumes/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=1d'
+    ports:
+      - "9090:9090" # UI -> http://localhost:9090
+    networks:
+      - dev-network
+
+  # Grafana - Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dev_grafana
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./docker-volumes/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000" # UI -> http://localhost:3000
+    networks:
+      - dev-network
+
+  # Jaeger - Distributed Tracing simplificado
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: dev_jaeger
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: :9411
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686" # UI -> http://localhost:16686
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    networks:
+      - dev-network
+
+  # ============================================================================
+  # UTILIDADES EXTRA
+  # ============================================================================
+
+  # Portainer - Gestión Docker con UI
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: dev_portainer
+    command: -H unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker-volumes/portainer:/data
+    ports:
+      - "9000:9000" # UI -> http://localhost:9000
+    networks:
+      - dev-network
+
+  # Swagger Editor - Para diseñar APIs
+  swagger-editor:
+    image: swaggerapi/swagger-editor
+    container_name: dev_swagger
+    ports:
+      - "8083:8080" # UI -> http://localhost:8083
+    networks:
+      - dev-network
+
+  # MinIO - S3 compatible para pruebas de storage
+  minio:
+    image: minio/minio:latest
+    container_name: dev_minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./docker-volumes/minio:/data
+    ports:
+      - "9001:9001" # Console -> http://localhost:9001
+      - "9002:9000" # API
+    networks:
+      - dev-network
+
+# ============================================================================
+# INSTRUCCIONES DE USO
+# ============================================================================
+# 
+# 1. Iniciar todos los servicios:
+#    docker-compose up -d
+#
+# 2. Iniciar servicios específicos:
+#    docker-compose up -d postgres redis rabbitmq
+#
+# 3. Ver logs:
+#    docker-compose logs -f [servicio]
+#
+# 4. Detener todo:
+#    docker-compose down
+#
+# 5. Eliminar volúmenes (CUIDADO - borra datos):
+#    docker-compose down -v
+#
+# ============================================================================
+# CREDENCIALES Y PUERTOS
+# ============================================================================
+#
+# PostgreSQL:
+#   - Host: localhost:5432
+#   - User: postgres / Password: postgres
+#
+# MySQL:
+#   - Host: localhost:3306
+#   - User: root / Password: root
+#
+# MongoDB:
+#   - Host: localhost:27017
+#   - Sin autenticación
+#
+# Redis:
+#   - Host: localhost:6379
+#   - Sin password
+#
+# RabbitMQ:
+#   - AMQP: localhost:5672
+#   - UI: http://localhost:15672 (guest/guest)
+#
+# Kafka:
+#   - Bootstrap: localhost:9092
+#   - UI: http://localhost:8080
+#
+# HERRAMIENTAS UI:
+#   - Adminer (BD): http://localhost:8081
+#   - Mongo Express: http://localhost:8082
+#   - Redis Insight: http://localhost:5540
+#   - Mailhog: http://localhost:8025
+#   - Prometheus: http://localhost:9090
+#   - Grafana: http://localhost:3000 (admin/admin)
+#   - Jaeger: http://localhost:16686
+#   - Portainer: http://localhost:9000
+#   - Swagger Editor: http://localhost:8083
+#   - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
+#
+# ============================================================================

@@ -1,0 +1,168 @@
+# Configuración de Prometheus para Desarrollo Local
+global:
+  scrape_interval: 15s # Frecuencia de recolección de métricas
+  evaluation_interval: 15s # Frecuencia de evaluación de reglas
+  external_labels:
+    cluster: 'dev-local'
+    environment: 'development'
+
+# Configuración de Alertmanager (opcional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Reglas de alertas (opcional)
+# rule_files:
+#   - "alerts/*.yml"
+
+# Configuración de scraping
+scrape_configs:
+  # Prometheus se monitorea a sí mismo
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          tier: 'monitoring'
+
+  # PostgreSQL Exporter (requiere instalar postgres_exporter)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'postgresql'
+          tier: 'database'
+
+  # MySQL Exporter (requiere instalar mysqld_exporter)
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysql-exporter:9104']
+        labels:
+          service: 'mysql'
+          tier: 'database'
+
+  # MongoDB Exporter (requiere instalar mongodb_exporter)
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongodb-exporter:9216']
+        labels:
+          service: 'mongodb'
+          tier: 'database'
+
+  # Redis Exporter (requiere instalar redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          tier: 'cache'
+
+  # RabbitMQ (tiene métricas nativas en el puerto 15692)
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['dev_rabbitmq:15692']
+        labels:
+          service: 'rabbitmq'
+          tier: 'messaging'
+
+  # Nginx Exporter (requiere instalar nginx-prometheus-exporter)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+        labels:
+          service: 'nginx'
+          tier: 'gateway'
+
+  # ========================================================================
+  # MICROSERVICIOS - Configuración para tus servicios
+  # ========================================================================
+  # Asume que tus microservicios exponen métricas en /metrics
+  
+  - job_name: 'user-service'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:3001']
+        labels:
+          service: 'user-service'
+          tier: 'backend'
+          team: 'users'
+
+  - job_name: 'order-service'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:3002']
+        labels:
+          service: 'order-service'
+          tier: 'backend'
+          team: 'orders'
+
+  - job_name: 'product-service'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:3003']
+        labels:
+          service: 'product-service'
+          tier: 'backend'
+          team: 'products'
+
+  - job_name: 'payment-service'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:3004']
+        labels:
+          service: 'payment-service'
+          tier: 'backend'
+          team: 'payments'
+
+  # ========================================================================
+  # SERVICE DISCOVERY (Opcional - para descubrimiento dinámico)
+  # ========================================================================
+  
+  # Docker Service Discovery (requiere habilitar API de Docker)
+  # - job_name: 'docker-services'
+  #   docker_sd_configs:
+  #     - host: unix:///var/run/docker.sock
+  #   relabel_configs:
+  #     - source_labels: [__meta_docker_container_name]
+  #       target_label: container
+  #     - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+  #       target_label: service
+
+  # Consul Service Discovery (si usas Consul)
+  # - job_name: 'consul-services'
+  #   consul_sd_configs:
+  #     - server: 'consul:8500'
+
+# ============================================================================
+# NOTAS DE CONFIGURACIÓN
+# ============================================================================
+# 
+# Para que tus microservicios puedan ser monitoreados, necesitan:
+# 
+# 1. Exponer métricas en formato Prometheus (generalmente en /metrics)
+# 2. Usar librerías como:
+#    - Node.js: prom-client
+#    - Python: prometheus_client
+#    - Java: micrometer
+#    - Go: prometheus/client_golang
+#    - .NET: prometheus-net
+# 
+# Ejemplo básico en Node.js:
+# ```javascript
+# const promClient = require('prom-client');
+# const register = new promClient.Registry();
+# promClient.collectDefaultMetrics({ register });
+# 
+# app.get('/metrics', async (req, res) => {
+#   res.set('Content-Type', register.contentType);
+#   res.end(await register.metrics());
+# });
+# ```
+# 
+# ============================================================================
