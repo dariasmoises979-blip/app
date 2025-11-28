@@ -1,4 +1,6 @@
 📄 README.md — versión resumida para GitHub
+dgwe
+
 # 🖥️ systemd
 
 Aplicación web simple construida con **Python + Flask** para mostrar información del sistema donde se ejecuta.
