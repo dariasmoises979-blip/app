@@ -1,4 +1,5 @@
 📄 README.md — versión resumida para GitHub
+d
 
 # 🖥️ systemd
 
