@@ -1,5 +1,5 @@
 📄 README.md — versión resumida para GitHub
-dgwe
+dgwed
 
 # 🖥️ systemd
 
